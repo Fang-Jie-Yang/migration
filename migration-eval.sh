@@ -7,18 +7,24 @@ username="fjyang"
 src_monitor_port="1234"
 dst_monitor_port="1235"
 migration_port=8888
-src_migration_attr[0]="migrate_set_capability compress on"
-src_migration_attr[1]="migrate_set_parameter compress-threads 64"
-src_migration_attr[2]="migrate_set_parameter compress-level 9"
-dst_migration_attr[0]="migrate_set_capability compress on"
-dst_migration_attr[1]="migrate_set_parameter decompress-threads 16"
-dst_migration_attr[2]="migrate_set_parameter compress-level 9"
+compress="on"
+compress_threads="32"
+decompress_threads="1"
+compress_level="9"
 rounds=10
-output_dir="./eval-data/eval-compress-64-16-lv9"
+output_dir="./eval-data"
 
 command_migrate="migrate -d tcp:$dst_ip:$migration_port"
 command_info="info migrate"
 command_shutdown="quit"
+src_migration_attr[0]="migrate_set_capability compress $compress"
+src_migration_attr[1]="migrate_set_parameter compress-threads $compress_threads"
+src_migration_attr[2]="migrate_set_parameter compress-level $compress_level"
+dst_migration_attr[0]="migrate_set_capability compress $compress"
+dst_migration_attr[1]="migrate_set_parameter decompress-threads $decompress_threads"
+dst_migration_attr[2]="migrate_set_parameter compress-level $compress_level"
+output_dir+="/eval-compress-$compress-$compress_threads-$decompress_threads-lv$compress_level"
+
 
 BCYAN='\033[1;36m'
 BRED='\033[1;31m'
@@ -26,25 +32,42 @@ NC='\033[0m'
 
 sum_totaltime=0
 sum_downtime=0
+sum_rate=0
 totaltime=0
 downtime=0
 fail=0
-
 mkdir $output_dir
-
 for ((i = 0; i < $rounds; i++)); do
 
 	echo -e "${BCYAN}opening VM on src${NC}"
-	ssh $username@$src_ip << EOF
+	log=$( { ssh $username@$src_ip << EOF
 	cd /mydata/some-tutorials/files/blk
 	sudo nohup ./blk.sh
 EOF
-
+	} 2>&1 )
+	
 	echo -e "${BCYAN}opening VM on dst${NC}"
-	ssh $username@$dst_ip << EOF
+	log+=$( { ssh $username@$dst_ip << EOF
 	cd /mydata/some-tutorials/files/blk
 	sudo nohup ./resume-blk.sh
 EOF
+	} 2>&1 )
+
+	err=$(echo "$log" | grep "qemu-system-aarch64: Failed to retrieve host CPU features")
+
+	if [[ -n "$err" ]]; then
+		echo -e "${BRED}qemu broken, rebooting${NC}"		
+		ssh $username@$src_ip << EOF
+		sudo reboot
+EOF
+		ssh $username@$dst_ip << EOF
+		sudo reboot
+EOF
+		echo -e "${BCYAN}waiting for reboot${NC}"		
+		sleep 8m
+		(( i -= 1 ))
+		continue
+	fi
 
 	echo -e "${BCYAN}setting migration attributes on src${NC}"
 	for attr in "${src_migration_attr[@]}"; do
@@ -68,8 +91,10 @@ EOF
 	echo -e "${BCYAN}fetching migration results${NC}"
 	nc -N $src_ip $src_monitor_port <<< "$command_info" | \
 	tail -n +3 | head -n -1 > "$output_dir/$i.txt"
+	dos2unix "$output_dir/$i.txt"
 	totaltime=$(cat "$output_dir/$i.txt" | awk '$1 == "total" && $2 == "time:" {print $3}')
 	downtime=$(cat "$output_dir/$i.txt" | awk '$1 == "downtime:" {print $2}')
+	compress_rate=$(cat "$output_dir/$i.txt" | awk '$1 == "compression" && $2 == "rate:" {print $3}')
 	if [[ -z "$totaltime" ]]; then
 		echo -e "${BRED}migration failed${NC}"
 		(( i -= 1 ))
@@ -81,8 +106,10 @@ EOF
 	else
 		echo "totaltime = $totaltime"
 		echo "downtime = $downtime"
+		echo "compress rate = $compress_rate"
 		(( sum_totaltime += totaltime ))
 		(( sum_downtime += downtime ))
+		sum_rate=$(echo "$compress_rate + $sum_rate"|bc)
 	fi
 	echo -e "${BCYAN}cleaning up VMs${NC}"
 	nc -N $src_ip $src_monitor_port <<< "$command_shutdown"
@@ -93,6 +120,8 @@ done
 
 (( sum_totaltime /= rounds ))
 (( sum_downtime /= rounds ))
+sum_rate=$(echo "scale=4; $sum_rate / $rounds"|bc)
 echo "avg totaltime: $sum_totaltime"
 echo "avg downtime: $sum_downtime"
+echo "avg compress rate: $sum_rate"
 echo "fail: $fail"
