@@ -1,17 +1,25 @@
 #! /bin/bash
 
+if [[ $# -ne 2 ]]; then
+	echo "usage: ./migration-eval.sh compress-level max-bandwidth"
+	exit
+fi
+compress_level="$1"
+max_bandwidth="$2"
+
 ## TODO: Edit the parameters here
-src_ip="128.110.216.80"
-dst_ip="128.110.216.63"
+src_ip="128.110.216.136"
+dst_ip="128.110.216.122"
 username="fjyang"
 src_monitor_port="1234"
 dst_monitor_port="1235"
 migration_port=8888
-compress_level="9"
-max_bandwidth="32"
 rounds=10
 output_dir_root="./eval-data"
-result_path="res.txt"
+result_prefix="res"
+expected_max_downtime="1m"
+
+result_path="$result_prefix-$compress_level-$max_bandwidth.txt"
 
 compress[0]="off"
 compress[1]="on"
@@ -47,6 +55,7 @@ command_shutdown="quit"
 mutual_migration_attr[0]="migrate_set_parameter compress-level $compress_level"
 mutual_migration_attr[1]="migrate_set_parameter max-bandwidth $max_bandwidth"
 
+BGREEN='\033[1;32m'
 BCYAN='\033[1;36m'
 BRED='\033[1;31m'
 NC='\033[0m'
@@ -129,7 +138,7 @@ EOF
 		echo ""
 
 		echo -e "${BCYAN}wait for the migration to complete${NC}"
-		sleep 30s
+		sleep "$expected_max_downtime"
 			
 		echo -e "${BCYAN}fetching migration results${NC}"
 		nc -N $src_ip $src_monitor_port <<< "$command_info" | \
@@ -147,12 +156,12 @@ EOF
 			(( i -= 1 ))
 			(( fail += 1 ))
 		else
-			echo "totaltime = $totaltime"
-			echo "downtime = $downtime"
+			echo -e "${BGREEN}totaltime = $totaltime${NC}"
+			echo -e "${BGREEN}downtime = $downtime${NC}"
 			(( sum_totaltime += totaltime ))
 			(( sum_downtime += downtime ))
 			if [[ "${compress[$t]}" == "on" ]]; then 
-				echo "compress rate = $compress_rate"
+				echo -e "${BGREEN}compress rate = $compress_rate${NC}"
 				sum_rate=$(echo "$compress_rate + $sum_rate"|bc)
 			fi
 		fi
