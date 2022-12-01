@@ -17,8 +17,6 @@ migration_port=8888
 rounds=10
 output_dir_root="./eval-data"
 result_prefix="res"
-expected_max_downtime="1m"
-
 
 compress[0]="off"
 compress[1]="on"
@@ -59,7 +57,6 @@ BGREEN='\033[1;32m'
 BCYAN='\033[1;36m'
 BRED='\033[1;31m'
 NC='\033[0m'
-
 
 mkdir $output_dir_root
 mkdir "$output_dir_root/bandwitdh-$max_bandwidth-level-$compress_level"
@@ -146,11 +143,7 @@ EOF
 			
 
 		echo -e "${BCYAN}checking migration attrs${NC}"
-        # TODO: here
-		ncat $src_ip $src_monitor_port <<< "info migrate_parameter" > "$output_dir/temp.txt"
-		compress_threads=$(cat "$output_dir/temp.txt" | awk '$1 == "total" && $2 == "time:" {print $3}')
-		ncat $dst_ip $dst_monitor_port <<< "info migrate_parameter" > "$output_dir/temp.txt"
-		decompress_threads=$(cat "$output_dir/temp.txt" | awk '$1 == "total" && $2 == "time:" {print $3}')
+        # TODO
 
 
 		echo -e "${BCYAN}fetching migration results${NC}"
