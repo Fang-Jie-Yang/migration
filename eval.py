@@ -3,31 +3,21 @@ import paramiko
 from qemu.qmp import QMPClient
 from time import sleep
 
-ssh_port     = 22
+### Connection Settings ###
+ssh_port = 22
+qmp_port = 4444
 username = "fjyang"
 src_ip   = "128.110.216.31"
 dst_ip   = "128.110.216.49"
-qmp_port = 4444
+ssh_key  = paramiko.RSAKey.from_private_key_file("/home/student/08/b08902059/.ssh/id_rsa")
 
-key = paramiko.RSAKey.from_private_key_file("/home/student/08/b08902059/.ssh/id_rsa")
+### Evaluation Settings ###
+rounds_per_setting  = 5
+max_bandwidth       = 3 * 1024 * 1024
+compress            = [ False, True, True, True ] 
+compress_threads    = [ 1    , 8   , 8   , 8    ] 
+decompress_threads  = [ 1    , 2   , 4   , 8    ]
 
-#async def temp():
-#    src_qmp = QMPClient("src")
-#    await src_qmp.connect((src_ip, qmp_port))
-#    src_attrs = {'compress-threads' : 1} 
-#    await src_qmp.execute('migrate-set-parameters', src_attrs)
-#    await src_qmp.execute('migrate-set-capabilities', \
-#        {"capabilities": [{"capability": "compress", "state": True}]})
-#asyncio.run(temp())
-#cmd = """
-#lscpu
-#ip a
-#"""
-#_, stdout, stderr = src.exec_command(cmd)
-#print(stdout.read().decode())
-#_, stdout, stderr = src.exec_command("ip a")
-#print(stdout.read().decode())
-#src.close()
 
 async def check_settings(src_qmp, dst_qmp, cap, src_params, dst_params):
     correct = True
@@ -56,18 +46,21 @@ async def check_settings(src_qmp, dst_qmp, cap, src_params, dst_params):
 class migration_error(Exception): pass
 class qemu_error(Exception): pass
 # return dict: {success, downtime, totaltime, compress rate, rebooting}
-async def migrate(src_ip, dst_ip, caps, src_params, dst_params):
+async def migrate(caps, src_params, dst_params):
+
+    global ssh_key
+    global src_ip
+    global dst_ip
 
     ret = {}
     try:
     # Set up connections
-        key = paramiko.RSAKey.from_private_key_file("/home/student/08/b08902059/.ssh/id_rsa")
         src_ssh = paramiko.SSHClient()
         src_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        src_ssh.connect(src_ip, ssh_port, username, pkey=key)
+        src_ssh.connect(src_ip, ssh_port, username, pkey=ssh_key)
         dst_ssh = paramiko.SSHClient()
         dst_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        dst_ssh.connect(dst_ip, ssh_port, username, pkey=key)
+        dst_ssh.connect(dst_ip, ssh_port, username, pkey=ssh_key)
 
     # Open VMs
         print("opening VMs")
@@ -81,10 +74,10 @@ async def migrate(src_ip, dst_ip, caps, src_params, dst_params):
         """
         stdin, stdout, stderr = src_ssh.exec_command(src_commands)
         src_err = stderr.read().decode()
-        print(src_err)
+        #print(src_err)
         stdin, stdout, stderr = dst_ssh.exec_command(dst_commands)
         dst_err = stderr.read().decode()
-        print(dst_err)
+        #print(dst_err)
         
     # Check if QEMU break
     # note: we only check this error because it needs rebooting to fix
@@ -157,11 +150,9 @@ async def migrate(src_ip, dst_ip, caps, src_params, dst_params):
         ret["totaltime"] = result["total-time"]
         if "compression" in result:
             ret["compress rate"] = result["compression"]["compression-rate"]
+        else:
+            ret["compress rate"] = 0
         ret["rebooting"] = False
-
-        await src_qmp.disconnect()
-        await dst_qmp.disconnect()
-
         return ret
 
 
@@ -177,6 +168,13 @@ async def migrate(src_ip, dst_ip, caps, src_params, dst_params):
         ret["totaltime"] = -1
         ret["compress rate"] = -1
         ret["rebooting"] = True
+
+        hosts_up = False
+        while not host_up:
+            sleep(30)
+            src_up  = True if os.system("ping -c 1 " + src_ip) == 0 else False
+            dst_up  = True if os.system("ping -c 1 " + dst_ip) == 0 else False
+            host_up = src_up and dst_up
         return ret
 
     except migration_error:
@@ -190,9 +188,46 @@ async def migrate(src_ip, dst_ip, caps, src_params, dst_params):
         ret["rebooting"] = False
         return ret
 
+    #except EOFError:
+    #    pass
 
-caps = {"capabilities": [{"capability": "compress", "state": False}]}
-src_params = {'compress-threads' : 1} 
-dst_params = {'compress-threads' : 1} 
-ret = asyncio.run(migrate(src_ip, dst_ip, caps, src_params, dst_params))
-print(ret)
+#caps = {"capabilities": [{"capability": "compress", "state": False}]}
+#src_params = {'compress-threads' : 1} 
+#dst_params = {'compress-threads' : 1} 
+#ret = asyncio.run(migrate(src_ip, dst_ip, caps, src_params, dst_params))
+#print(ret)
+
+for i in range(len(compress)):
+
+    caps   = { "capabilities": [{"capability": "compress", "state": compress[i]}] }
+    params = { 
+               'compress-threads'   : compress_threads[i], 
+               'decompress-threads' : decompress_threads[i],
+               'max-bandwidth'      : max_bandwidth
+             }
+    print(params)
+
+    sum_downtime      = 0
+    sum_totaltime     = 0
+    sum_compress_rate = 0
+    success = 0
+    t = 0
+    while success < rounds_per_setting:
+        print("now:", t)
+        res = asyncio.run(migrate(caps, params, params))
+        print(res)
+        success += res["success"]
+        if res["success"]:
+            sum_downtime      += res["downtime"]
+            sum_totaltime     += res["totaltime"]
+            sum_compress_rate += res["compress rate"]
+        t += 1
+        sleep(10)
+    print("avg downtime:",      sum_downtime      / rounds_per_setting)
+    print("avg totaltime:",     sum_totaltime     / rounds_per_setting)
+    print("avg compress rate:", sum_compress_rate / rounds_per_setting)
+        
+
+            
+
+            
