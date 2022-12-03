@@ -1,4 +1,6 @@
 import asyncio
+import os
+import json
 import paramiko
 from qemu.qmp import QMPClient
 from time import sleep
@@ -12,8 +14,10 @@ dst_ip   = "128.110.216.49"
 ssh_key  = paramiko.RSAKey.from_private_key_file("/home/student/08/b08902059/.ssh/id_rsa")
 
 ### Evaluation Settings ###
-rounds_per_setting  = 5
-max_bandwidth       = 3 * 1024 * 1024
+rounds_per_setting  = 20
+compress_level      = 1
+max_bandwidth_MB    = 3
+max_bandwidth       = max_bandwidth_MB * 1024 * 1024
 compress            = [ False, True, True, True ] 
 compress_threads    = [ 1    , 8   , 8   , 8    ] 
 decompress_threads  = [ 1    , 2   , 4   , 8    ]
@@ -43,6 +47,15 @@ async def check_settings(src_qmp, dst_qmp, cap, src_params, dst_params):
             break
     return correct
 
+# note: don't use QMP because the connection will drop after 'quit'
+#       causing EOFError on QMPClient
+# TODO: make this more robust
+def shutdown_vm(ssh):
+    qmp_cmd  = "{ \'execute\': \'qmp_capabilities\' }"
+    qmp_cmd += "\\n{ \'execute\': \'quit\' }"
+    ssh_cmd  = f"echo \"{qmp_cmd}\" | nc -N localhost {qmp_port}"
+    ssh.exec_command(ssh_cmd)
+
 class migration_error(Exception): pass
 class qemu_error(Exception): pass
 # return dict: {success, downtime, totaltime, compress rate, rebooting}
@@ -52,6 +65,7 @@ async def migrate(caps, src_params, dst_params):
     global src_ip
     global dst_ip
 
+    VMs_up = False
     ret = {}
     try:
     # Set up connections
@@ -84,21 +98,25 @@ async def migrate(caps, src_params, dst_params):
         qemu_err = "qemu-system-aarch64: Failed to retrieve host CPU features"
         if qemu_err in src_err or qemu_err in dst_err:
             raise qemu_error()
-        src_ssh.close()
-        dst_ssh.close()
+        #src_ssh.close()
+        #dst_ssh.close()
+        VMs_up = True
 
     # Wait for VMs to ready
         sleep(15)
+
+    # Set up QMP connections
+    # note: we ignore errors here 
+        src_qmp = QMPClient("src")
+        await src_qmp.connect((src_ip, qmp_port))
+        dst_qmp = QMPClient("dst")
+        await dst_qmp.connect((dst_ip, qmp_port))
             
     # Set capabilities, parameters
     # note: we ignore errors here 
         print("setting params")
-        src_qmp = QMPClient("src")
-        await src_qmp.connect((src_ip, qmp_port))
         temp = await src_qmp.execute('migrate-set-capabilities', caps)
         temp = await src_qmp.execute('migrate-set-parameters', src_params)
-        dst_qmp = QMPClient("dst")
-        await dst_qmp.connect((dst_ip, qmp_port))
         temp = await dst_qmp.execute('migrate-set-capabilities', caps)
         temp = await dst_qmp.execute('migrate-set-parameters', dst_params)
 
@@ -112,20 +130,23 @@ async def migrate(caps, src_params, dst_params):
         print("starting migration")
         await src_qmp.execute('migrate', { "uri": f"tcp:{dst_ip}:8888" })
 
-
     # Wait for migration to complete & fetch info
         failed = False
         while True:
             sleep(15)
             result = await src_qmp.execute('query-migrate')
+            print(result)
+            if not result:
+                failed = True
+                break
             if 'status' in result:
                 if result['status'] == 'completed':
                     break
-                if result['status'] == failed:
+                if result['status'] == 'failed':
                     failed = True
                     break
         # FIXME: sometimes it happens, don't know why
-        if result["downtime"] == 0 or result["total-time"] == 0:
+        if result and (result["downtime"] == 0 or result["total-time"] == 0):
             failed = True
         if failed:
             raise migration_error()
@@ -140,9 +161,16 @@ async def migrate(caps, src_params, dst_params):
     # Close VMs
     # note: need to make sure that we are back to the initial state
         print("closing VMs")
-        await src_qmp.execute("quit")
-        await dst_qmp.execute("quit")
+        shutdown_vm(src_ssh)
+        shutdown_vm(dst_ssh)
+        VMs_up = False
         sleep(15)
+
+    # Clean up resources
+        src_ssh.close()
+        dst_ssh.close()
+        await src_qmp.disconnect()
+        await dst_qmp.disconnect()
 
     # Return result
         ret["success"] = 1
@@ -170,17 +198,21 @@ async def migrate(caps, src_params, dst_params):
         ret["rebooting"] = True
 
         hosts_up = False
-        while not host_up:
+        while not hosts_up:
             sleep(30)
             src_up  = True if os.system("ping -c 1 " + src_ip) == 0 else False
             dst_up  = True if os.system("ping -c 1 " + dst_ip) == 0 else False
-            host_up = src_up and dst_up
+            hosts_up = src_up and dst_up
         return ret
 
     except migration_error:
         print("migration failed")
-        await src_qmp.execute("quit")
-        await dst_qmp.execute("quit")
+        shutdown_vm(src_ssh)
+        shutdown_vm(dst_ssh)
+        src_ssh.close()
+        dst_ssh.close()
+        await src_qmp.disconnect()
+        await dst_qmp.disconnect()
         ret["success"] = 0
         ret["downtime"] = -1
         ret["totaltime"] = -1
@@ -188,14 +220,17 @@ async def migrate(caps, src_params, dst_params):
         ret["rebooting"] = False
         return ret
 
-    #except EOFError:
-    #    pass
+    except Exception:
+        pass
+        
 
 #caps = {"capabilities": [{"capability": "compress", "state": False}]}
 #src_params = {'compress-threads' : 1} 
 #dst_params = {'compress-threads' : 1} 
 #ret = asyncio.run(migrate(src_ip, dst_ip, caps, src_params, dst_params))
 #print(ret)
+
+f = open(f"result-bw-{max_bandwidth_MB}-lv-{compress_level}.txt", "w")
 
 for i in range(len(compress)):
 
@@ -206,6 +241,7 @@ for i in range(len(compress)):
                'max-bandwidth'      : max_bandwidth
              }
     print(params)
+    f.write(json.dumps(params) + '\n')
 
     sum_downtime      = 0
     sum_totaltime     = 0
@@ -223,11 +259,15 @@ for i in range(len(compress)):
             sum_compress_rate += res["compress rate"]
         t += 1
         sleep(10)
-    print("avg downtime:",      sum_downtime      / rounds_per_setting)
-    print("avg totaltime:",     sum_totaltime     / rounds_per_setting)
-    print("avg compress rate:", sum_compress_rate / rounds_per_setting)
+    info_downtime      = f"\tavg downtime      : {sum_downtime      / rounds_per_setting}\n"
+    info_totaltime     = f"\tavg totaltime     : {sum_totaltime     / rounds_per_setting}\n"
+    info_compress_rate = f"\tavg compress rate : {sum_compress_rate / rounds_per_setting}\n"
+    print(info_downtime)
+    print(info_totaltime)
+    print(info_compress_rate)
+
+    f.write(info_downtime)
+    f.write(info_totaltime)
+    f.write(info_compress_rate)
+
         
-
-            
-
-            
