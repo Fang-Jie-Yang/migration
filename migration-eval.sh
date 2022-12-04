@@ -6,48 +6,40 @@ if [[ $# -ne 2 ]]; then
 fi
 compress_level="$1"
 max_bandwidth="$2"
+(( max_bandwidth_Bps = max_bandwidth * 1024 * 1024))
 
 ## TODO: Edit the parameters here
-src_ip="128.110.216.73"
-dst_ip="128.110.216.57"
+src_ip="128.110.216.31"
+dst_ip="128.110.216.49"
 username="fjyang"
 src_monitor_port="1234"
 dst_monitor_port="1235"
 migration_port=8888
-rounds=10
+rounds=20
 output_dir_root="./eval-data"
 result_prefix="res"
+expected_max_downtime="1m"
 
-compress[0]="off"
-compress[1]="on"
-compress[2]="on"
-compress[3]="on"
-compress[4]="on"
-compress[5]="on"
-compress[6]="on"
-compress[7]="on"
-compress[8]="on"
-compress_threads[0]="8"
-compress_threads[1]="8"
-compress_threads[2]="8"
-compress_threads[3]="16"
-compress_threads[4]="16"
-compress_threads[5]="32"
-compress_threads[6]="32"
-compress_threads[7]="64"
-compress_threads[8]="64"
-decompress_threads[0]="1"
-decompress_threads[1]="1"
-decompress_threads[2]="2"
-decompress_threads[3]="1"
-decompress_threads[4]="4"
-decompress_threads[5]="1"
-decompress_threads[6]="8"
-decompress_threads[7]="1"
-decompress_threads[8]="16"
+Compress[0]="off"
+Compress[1]="on"
+Compress[2]="on"
+Compress[3]="on"
+Compress[4]="on"
+Compress_threads[0]="8"
+Compress_threads[1]="8"
+Compress_threads[2]="8"
+Compress_threads[3]="8"
+Compress_threads[4]="8"
+Decompress_threads[0]="1"
+Decompress_threads[1]="1"
+Decompress_threads[2]="2"
+Decompress_threads[3]="4"
+Decompress_threads[4]="8"
 
 command_migrate="migrate -d tcp:$dst_ip:$migration_port"
-command_info="info migrate"
+command_info="info migrate
+info migrate_parameters
+info migrate_capabilities"
 command_shutdown="quit"
 mutual_migration_attr[0]="migrate_set_parameter compress-level $compress_level"
 mutual_migration_attr[1]="migrate_set_parameter max-bandwidth $max_bandwidth"
@@ -64,11 +56,11 @@ mkdir "$output_dir_root/bandwitdh-$max_bandwidth-level-$compress_level"
 echo "max bandwidth: $max_bandwidth" > $result_path
 echo "compress level: $compress_level" >> $result_path
 
-for ((t = 0; t < 9; t++)); do
+for ((t = 0; t < 5; t++)); do
 
     # set up output directory
 	output_dir="$output_dir_root/bandwitdh-$max_bandwidth-level-$compress_level/"
-	output_dir+="compress-${compress[$t]}-${compress_threads[$t]}-${decompress_threads[$t]}"
+	output_dir+="compress-${Compress[$t]}-${Compress_threads[$t]}-${Decompress_threads[$t]}"
 	mkdir "$output_dir"
 
 	sum_totaltime=0
@@ -78,10 +70,10 @@ for ((t = 0; t < 9; t++)); do
 	downtime=0
 	fail=0
 
-	src_migration_attr[0]="migrate_set_capability compress ${compress[$t]}"
-	src_migration_attr[1]="migrate_set_parameter compress-threads ${compress_threads[$t]}"
-	dst_migration_attr[0]="migrate_set_capability compress ${compress[$t]}"
-	dst_migration_attr[1]="migrate_set_parameter decompress-threads ${decompress_threads[$t]}"
+	src_migration_attr[0]="migrate_set_capability compress ${Compress[$t]}"
+	src_migration_attr[1]="migrate_set_parameter compress-threads ${Compress_threads[$t]}"
+	dst_migration_attr[0]="migrate_set_capability compress ${Compress[$t]}"
+	dst_migration_attr[1]="migrate_set_parameter decompress-threads ${Decompress_threads[$t]}"
 
 	for ((i = 0; i < $rounds; i++)); do
 
@@ -131,46 +123,92 @@ EOF
 			ncat --send-only $dst_ip $dst_monitor_port <<< "$attr"
 		done
 		for attr in "${mutual_migration_attr[@]}"; do
-			ncat --send-only $src_ip $src_monitor_port <<< "$attr"
+			ncat --send-only $dst_ip $dst_monitor_port <<< "$attr"
 		done
 
 		echo -e "${BCYAN}starting the migration${NC}"
 		ncat --send-only $src_ip $src_monitor_port <<< "$command_migrate"
-		echo ""
 
 		echo -e "${BCYAN}wait for the migration to complete${NC}"
 		sleep "$expected_max_downtime"
-			
-
-		echo -e "${BCYAN}checking migration attrs${NC}"
-        # TODO
 
 
 		echo -e "${BCYAN}fetching migration results${NC}"
-		ncat $src_ip $src_monitor_port <<< "$command_info" | \
-		tail -n +3 | head -n -1 > "$output_dir/$i.txt"
-		dos2unix "$output_dir/$i.txt"
-		totaltime=$(cat "$output_dir/$i.txt" | awk '$1 == "total" && $2 == "time:" {print $3}')
-		downtime=$(cat "$output_dir/$i.txt" | awk '$1 == "downtime:" {print $2}')
-		compress_rate=$(cat "$output_dir/$i.txt" | awk '$1 == "compression" && $2 == "rate:" {print $3}')
-		if [[ -z "$totaltime" ]]; then
+		ncat $src_ip $src_monitor_port <<< "$command_info" | strings > "$output_dir/src_$i.txt"
+		ncat $dst_ip $dst_monitor_port <<< "$command_info" | strings > "$output_dir/dst_$i.txt"
+
+        failed="False"
+		dos2unix "$output_dir/src_$i.txt"
+		dos2unix "$output_dir/dst_$i.txt"
+
+        src_compress_level=$(cat "$output_dir/src_$i.txt" | awk '$1 == "compress-level:"  {print $2}')
+        if [[ "$src_compress_level" != "$compress_level" ]]; then
+            echo -e "${BRED}src_compress_level: $src_compress_level${NC}"
+            failed="True"
+        fi
+        src_compress=$(cat "$output_dir/src_$i.txt" | awk '$1 == "compress:"  {print $2}')
+        if [[ "$src_compress" != "${Compress[$t]}" ]]; then
+            echo -e "${BRED}src_compress: $src_compress${NC}"
+            failed="True"
+        fi
+        dst_compress_level=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "compress-level:"  {print $2}')
+        if [[ "$dst_compress_level" != "$compress_level" ]]; then
+            echo -e "${BRED}dst_compress_level: $dst_compress_level${NC}"
+            failed="True"
+        fi
+        dst_compress=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "compress:"  {print $2}')
+        if [[ "$dst_compress" != "${Compress[$t]}" ]]; then
+            echo -e "${BRED}dst_compress: $dst_compress${NC}"
+            failed="True"
+        fi
+        src_bandwidth=$(cat "$output_dir/src_$i.txt" | awk '$1 == "max-bandwidth:"  {print $2}')
+        if [[ "$src_bandwidth" != "$max_bandwidth_Bps" ]]; then
+            echo -e "${BRED}src_bandwidth: $src_bandwidth${NC}"
+            failed="True"
+        fi
+        dst_bandwidth=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "max-bandwidth:"  {print $2}')
+        if [[ "$dst_bandwidth" != "$max_bandwidth_Bps" ]]; then
+            echo -e "${BRED}dst_bandwidth: $dst_bandwidth${NC}"
+            failed="True"
+        fi
+        compress_threads=$(cat "$output_dir/src_$i.txt" | awk '$1 == "compress-threads:"  {print $2}')
+        if [[ "$compress_threads" != "${Compress_threads[$t]}" ]]; then
+            echo -e "${BRED}compress_threads: $compress_threads${NC}"
+            failed="True"
+        fi
+        decompress_threads=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "decompress-threads:"  {print $2}')
+        if [[ "$decompress_threads" != "${Decompress_threads[$t]}" ]]; then
+            echo -e "${BRED}decompress_threads: $decompress_threads${NC}"
+            failed="True"
+        fi
+
+		totaltime=$(cat "$output_dir/src_$i.txt" | awk '$1 == "total" && $2 == "time:" {print $3}')
+        if [[ -z "$totaltime" ]]; then
+            echo -e "${BRED}totaltime${NC}"
+            failed="True"
+        fi
+		downtime=$(cat "$output_dir/src_$i.txt" | awk '$1 == "downtime:" {print $2}')
+        if [[ -z "$downtime" ]]; then
+            echo -e "${BRED}downtime${NC}"
+            failed="True"
+        fi
+		compress_rate=$(cat "$output_dir/src_$i.txt" | awk '$1 == "compression" && $2 == "rate:" {print $3}')
+
+		if [[ "$failed" == "True" ]]; then
 			echo -e "${BRED}migration failed${NC}"
 			(( i -= 1 ))
 			(( fail += 1 ))
-		elif [[ -z "$downtime" ]]; then
-			echo -e "${BRED}migration failed${NC}"
-			(( i -= 1 ))
-			(( fail += 1 ))
-		else
+        else
 			echo -e "${BGREEN}totaltime = $totaltime${NC}"
 			echo -e "${BGREEN}downtime = $downtime${NC}"
 			(( sum_totaltime += totaltime ))
 			(( sum_downtime += downtime ))
-			if [[ "${compress[$t]}" == "on" ]]; then 
+			if [[ "${Compress[$t]}" == "on" ]]; then 
 				echo -e "${BGREEN}compress rate = $compress_rate${NC}"
 				sum_rate=$(echo "$compress_rate + $sum_rate"|bc)
 			fi
 		fi
+
 		echo -e "${BCYAN}cleaning up VMs${NC}"
 		ncat --send-only $src_ip $src_monitor_port <<< "$command_shutdown"
 		ncat --send-only $dst_ip $dst_monitor_port <<< "$command_shutdown"

@@ -4,6 +4,8 @@ import json
 import paramiko
 from qemu.qmp import QMPClient
 from time import sleep
+import logging
+import traceback
 
 ### Connection Settings ###
 ssh_port = 22
@@ -18,10 +20,24 @@ rounds_per_setting  = 20
 compress_level      = 1
 max_bandwidth_MB    = 3
 max_bandwidth       = max_bandwidth_MB * 1024 * 1024
-compress            = [ False, True, True, True ] 
-compress_threads    = [ 1    , 8   , 8   , 8    ] 
-decompress_threads  = [ 1    , 2   , 4   , 8    ]
+compress            = [ False, True, True, True, True ] 
+compress_threads    = [ 1    , 8   , 8   , 8   , 8    ] 
+decompress_threads  = [ 1    , 1   , 2   , 4   , 8    ]
 
+def reboot(src_ssh, dst_ssh):
+    stdin, stdout, stderr = src_ssh.exec_command("sudo reboot")
+    stdin, stdout, stderr = dst_ssh.exec_command("sudo reboot")
+    src_ssh.close()
+    dst_ssh.close()
+    hosts_up = False
+    while not hosts_up:
+        sleep(30)
+        src_up  = True if os.system("ping -c 1 " + src_ip) == 0 else False
+        dst_up  = True if os.system("ping -c 1 " + dst_ip) == 0 else False
+        hosts_up = src_up and dst_up
+    # wait for ssh to up
+    sleep(30)
+    return 
 
 async def check_settings(src_qmp, dst_qmp, cap, src_params, dst_params):
     correct = True
@@ -58,7 +74,7 @@ def shutdown_vm(ssh):
 
 class migration_error(Exception): pass
 class qemu_error(Exception): pass
-# return dict: {success, downtime, totaltime, compress rate, rebooting}
+# return dict: {success, downtime, totaltime, compress rate}
 async def migrate(caps, src_params, dst_params):
 
     global ssh_key
@@ -141,13 +157,16 @@ async def migrate(caps, src_params, dst_params):
                 break
             if 'status' in result:
                 if result['status'] == 'completed':
-                    break
+                    # FIXME: sometimes it happens, don't know why
+                    if result and (result["downtime"] == 0 or result["total-time"] == 0):
+                        failed = True
+                        break
+                    else:
+                        break
                 if result['status'] == 'failed':
                     failed = True
                     break
-        # FIXME: sometimes it happens, don't know why
-        if result and (result["downtime"] == 0 or result["total-time"] == 0):
-            failed = True
+
         if failed:
             raise migration_error()
             
@@ -169,8 +188,6 @@ async def migrate(caps, src_params, dst_params):
     # Clean up resources
         src_ssh.close()
         dst_ssh.close()
-        await src_qmp.disconnect()
-        await dst_qmp.disconnect()
 
     # Return result
         ret["success"] = 1
@@ -180,29 +197,17 @@ async def migrate(caps, src_params, dst_params):
             ret["compress rate"] = result["compression"]["compression-rate"]
         else:
             ret["compress rate"] = 0
-        ret["rebooting"] = False
         return ret
 
 
     except qemu_error:
     # Reboot to fix qemu
         print("QEMU broken, rebooting")
-        stdin, stdout, stderr = src_ssh.exec_command("sudo reboot")
-        stdin, stdout, stderr = dst_ssh.exec_command("sudo reboot")
-        src_ssh.close()
-        dst_ssh.close()
+        reboot(src_ssh, dst_ssh)
         ret["success"] = 0
         ret["downtime"] = -1
         ret["totaltime"] = -1
         ret["compress rate"] = -1
-        ret["rebooting"] = True
-
-        hosts_up = False
-        while not hosts_up:
-            sleep(30)
-            src_up  = True if os.system("ping -c 1 " + src_ip) == 0 else False
-            dst_up  = True if os.system("ping -c 1 " + dst_ip) == 0 else False
-            hosts_up = src_up and dst_up
         return ret
 
     except migration_error:
@@ -211,18 +216,26 @@ async def migrate(caps, src_params, dst_params):
         shutdown_vm(dst_ssh)
         src_ssh.close()
         dst_ssh.close()
-        await src_qmp.disconnect()
-        await dst_qmp.disconnect()
         ret["success"] = 0
         ret["downtime"] = -1
         ret["totaltime"] = -1
         ret["compress rate"] = -1
-        ret["rebooting"] = False
         return ret
 
-    except Exception:
-        pass
-        
+    except Exception as e:
+        print("weird exceptionn")
+        logging.error(traceback.format_exc()) 
+        if VMs_up:
+            shutdown_vm(src_ssh)
+            shutdown_vm(dst_ssh)
+        src_ssh.close()
+        dst_ssh.close()
+        ret["success"] = 0
+        ret["downtime"] = -1
+        ret["totaltime"] = -1
+        ret["compress rate"] = -1
+        return ret
+            
 
 #caps = {"capabilities": [{"capability": "compress", "state": False}]}
 #src_params = {'compress-threads' : 1} 
@@ -246,8 +259,10 @@ for i in range(len(compress)):
     sum_downtime      = 0
     sum_totaltime     = 0
     sum_compress_rate = 0
-    success = 0
-    t = 0
+    success           = 0
+    t                 = 0
+    prev_failed       = False
+    continuous_fail   = 0
     while success < rounds_per_setting:
         print("now:", t)
         res = asyncio.run(migrate(caps, params, params))
@@ -257,6 +272,23 @@ for i in range(len(compress)):
             sum_downtime      += res["downtime"]
             sum_totaltime     += res["totaltime"]
             sum_compress_rate += res["compress rate"]
+            prev_failed        = False
+            continuous_fail    = 0
+        else:
+            if prev_failed:
+                continuous_fail += 1
+            if continuous_fail >= 10:
+                # reboot to fix stuff
+                src_ssh = paramiko.SSHClient()
+                src_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                src_ssh.connect(src_ip, ssh_port, username, pkey=ssh_key)
+                dst_ssh = paramiko.SSHClient()
+                dst_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                dst_ssh.connect(dst_ip, ssh_port, username, pkey=ssh_key)
+                reboot(src_ssh, dst_ssh)
+                continuous_fail = 0
+            prev_failed = True
+            
         t += 1
         sleep(10)
     info_downtime      = f"\tavg downtime      : {sum_downtime      / rounds_per_setting}\n"
