@@ -7,6 +7,7 @@ fi
 compress_level="$1"
 max_bandwidth="$2"
 (( max_bandwidth_Bps = max_bandwidth * 1024 * 1024))
+downtime_limit="3000"
 
 ## TODO: Edit the parameters here
 src_ip="128.110.216.31"
@@ -16,8 +17,8 @@ src_monitor_port="1234"
 dst_monitor_port="1235"
 migration_port=8888
 rounds=10
-output_dir_root="./eval-data"
-result_prefix="res"
+output_dir_root="./eval-busy-data"
+result_prefix="res-busy"
 expected_max_downtime="1m"
 
 Compress[0]="off"
@@ -43,6 +44,7 @@ info migrate_capabilities"
 command_shutdown="quit"
 mutual_migration_attr[0]="migrate_set_parameter compress-level $compress_level"
 mutual_migration_attr[1]="migrate_set_parameter max-bandwidth $max_bandwidth"
+mutual_migration_attr[2]="migrate_set_parameter downtime-limit $downtime_limit"
 result_path="$result_prefix-$compress_level-$max_bandwidth.txt"
 
 BGREEN='\033[1;32m'
@@ -80,14 +82,14 @@ for ((t = 0; t < 5; t++)); do
 		echo -e "${BCYAN}opening VM on src${NC}"
 		log=$( { ssh $username@$src_ip << EOF
 		cd /mydata/some-tutorials/files/blk
-		sudo nohup ./blk.sh
+		sudo nohup ./blk.sh --fs /proj/ntucsie-PG0/fjyang/cloud-hack-busy.img
 EOF
 		} 2>&1 )
 
 		echo -e "${BCYAN}opening VM on dst${NC}"
 		log+=$( { ssh $username@$dst_ip << EOF
 		cd /mydata/some-tutorials/files/blk
-		sudo nohup ./resume-blk.sh
+		sudo nohup ./resume-blk.sh --fs /proj/ntucsie-PG0/fjyang/cloud-hack-busy.img
 EOF
 		} 2>&1 )
 
@@ -164,6 +166,11 @@ EOF
             echo -e "${BRED}src_compress: $src_compress${NC}"
             failed="True"
         fi
+        src_limit=$(cat "$output_dir/src_$i.txt" | awk '$1 == "downtime-limit:"  {print $2}')
+        if [[ "$src_limit" != "$downtime_limit" ]]; then
+            echo -e "${BRED}src_limit: $src_compress${NC}"
+            failed="True"
+        fi
         dst_compress_level=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "compress-level:"  {print $2}')
         if [[ "$dst_compress_level" != "$compress_level" ]]; then
             echo -e "${BRED}dst_compress_level: $dst_compress_level${NC}"
@@ -172,6 +179,11 @@ EOF
         dst_compress=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "compress:"  {print $2}')
         if [[ "$dst_compress" != "${Compress[$t]}" ]]; then
             echo -e "${BRED}dst_compress: $dst_compress${NC}"
+            failed="True"
+        fi
+        dst_limit=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "downtime-limit:"  {print $2}')
+        if [[ "$dst_limit" != "$downtime_limit" ]]; then
+            echo -e "${BRED}dst_limit: $dst_compress${NC}"
             failed="True"
         fi
         src_bandwidth=$(cat "$output_dir/src_$i.txt" | awk '$1 == "max-bandwidth:"  {print $2}')
