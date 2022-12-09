@@ -18,9 +18,9 @@ src_monitor_port="1234"
 dst_monitor_port="1235"
 migration_port=8888
 rounds=10
-output_dir_root="./eval-sw-no-crypt-idle-8mb-data"
-result_prefix="res-sw-no-crypt-busy-idle-8mb-8thread"
-expected_max_downtime="90s"
+output_dir_root="./eval-sw-no-crypt-idle-data"
+result_prefix="res-sw-no-crypt-busy-idle-8thread"
+expected_max_downtime="10s"
 
 Compress[0]="off"
 Compress[1]="on"
@@ -60,7 +60,7 @@ mkdir "$output_dir_root/bandwitdh-$max_bandwidth-level-$compress_level"
 echo "max bandwidth: $max_bandwidth" > $result_path
 echo "compress level: $compress_level" >> $result_path
 
-for ((t = 0; t < 2; t++)); do
+for ((t = 0; t < 5; t++)); do
 
     # set up output directory
 	output_dir="$output_dir_root/bandwitdh-$max_bandwidth-level-$compress_level/"
@@ -105,7 +105,7 @@ EOF
 			sudo reboot
 EOF
 			echo -e "${BCYAN}waiting for reboot${NC}"		
-			sleep 8m
+			sleep 7m
 			(( i -= 1 ))
 			continue
         fi
@@ -152,11 +152,10 @@ EOF
 
 		echo -e "${BCYAN}fetching migration results${NC}"
 		ncat --wait 5s $src_ip $src_monitor_port <<< "$command_info" | strings > "$output_dir/src_$i.txt"
-		ncat --wait 5s $dst_ip $dst_monitor_port <<< "$command_info" | strings > "$output_dir/dst_$i.txt"
 
         failed="False"
 		dos2unix "$output_dir/src_$i.txt"
-		dos2unix "$output_dir/dst_$i.txt"
+		#dos2unix "$output_dir/dst_$i.txt"
 
         src_compress_level=$(cat "$output_dir/src_$i.txt" | awk '$1 == "compress-level:"  {print $2}')
         if [[ "$src_compress_level" != "$compress_level" ]]; then
@@ -179,26 +178,26 @@ EOF
             failed="True"
         fi
         
-        dst_compress_level=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "compress-level:"  {print $2}')
-        if [[ "$dst_compress_level" != "$compress_level" ]]; then
-            echo -e "${BRED}dst_compress_level: $dst_compress_level${NC}"
-            failed="True"
-        fi
-        dst_compress=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "compress:"  {print $2}')
-        if [[ "$dst_compress" != "${Compress[$t]}" ]]; then
-            echo -e "${BRED}dst_compress: $dst_compress${NC}"
-            failed="True"
-        fi
-        dst_limit=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "downtime-limit:"  {print $2}')
-        if [[ "$dst_limit" != "$downtime_limit" ]]; then
-            echo -e "${BRED}dst_limit: $dst_limit${NC}"
-            failed="True"
-        fi
-        dst_wait_thread=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "compress-wait-thread:"  {print $2}')
-        if [[ "$dst_wait_thread" != "$wait_thread" ]]; then
-            echo -e "${BRED}dst_wait_thread: $dst_wait_thread${NC}"
-            failed="True"
-        fi
+        #dst_compress_level=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "compress-level:"  {print $2}')
+        #if [[ "$dst_compress_level" != "$compress_level" ]]; then
+        #    echo -e "${BRED}dst_compress_level: $dst_compress_level${NC}"
+        #    failed="True"
+        #fi
+        #dst_compress=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "compress:"  {print $2}')
+        #if [[ "$dst_compress" != "${Compress[$t]}" ]]; then
+        #    echo -e "${BRED}dst_compress: $dst_compress${NC}"
+        #    failed="True"
+        #fi
+        #dst_limit=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "downtime-limit:"  {print $2}')
+        #if [[ "$dst_limit" != "$downtime_limit" ]]; then
+        #    echo -e "${BRED}dst_limit: $dst_limit${NC}"
+        #    failed="True"
+        #fi
+        #dst_wait_thread=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "compress-wait-thread:"  {print $2}')
+        #if [[ "$dst_wait_thread" != "$wait_thread" ]]; then
+        #    echo -e "${BRED}dst_wait_thread: $dst_wait_thread${NC}"
+        #    failed="True"
+        #fi
 
         src_bandwidth=$(cat "$output_dir/src_$i.txt" | awk '$1 == "max-bandwidth:"  {print $2}')
         if [[ "$src_bandwidth" != "$max_bandwidth_Bps" ]]; then
@@ -206,21 +205,21 @@ EOF
             failed="True"
         fi
 
-        dst_bandwidth=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "max-bandwidth:"  {print $2}')
-        if [[ "$dst_bandwidth" != "$max_bandwidth_Bps" ]]; then
-            echo -e "${BRED}dst_bandwidth: $dst_bandwidth${NC}"
-            failed="True"
-        fi
+        #dst_bandwidth=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "max-bandwidth:"  {print $2}')
+        #if [[ "$dst_bandwidth" != "$max_bandwidth_Bps" ]]; then
+        #    echo -e "${BRED}dst_bandwidth: $dst_bandwidth${NC}"
+        #    failed="True"
+        #fi
         compress_threads=$(cat "$output_dir/src_$i.txt" | awk '$1 == "compress-threads:"  {print $2}')
         if [[ "$compress_threads" != "${Compress_threads[$t]}" ]]; then
             echo -e "${BRED}compress_threads: $compress_threads${NC}"
             failed="True"
         fi
-        decompress_threads=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "decompress-threads:"  {print $2}')
-        if [[ "$decompress_threads" != "${Decompress_threads[$t]}" ]]; then
-            echo -e "${BRED}decompress_threads: $decompress_threads${NC}"
-            failed="True"
-        fi
+        #decompress_threads=$(cat "$output_dir/dst_$i.txt" | awk '$1 == "decompress-threads:"  {print $2}')
+        #if [[ "$decompress_threads" != "${Decompress_threads[$t]}" ]]; then
+        #    echo -e "${BRED}decompress_threads: $decompress_threads${NC}"
+        #    failed="True"
+        #fi
 
 		totaltime=$(cat "$output_dir/src_$i.txt" | awk '$1 == "total" && $2 == "time:" {print $3}')
         if [[ -z "$totaltime" ]]; then
@@ -258,9 +257,14 @@ EOF
 
 		echo -e "${BCYAN}cleaning up VMs${NC}"
 		ncat -w 5s --send-only $src_ip $src_monitor_port <<< "$command_shutdown"
-		ncat -w 5s --send-only $dst_ip $dst_monitor_port <<< "$command_shutdown"
+		#ncat -w 5s --send-only $dst_ip $dst_monitor_port <<< "$command_shutdown"
+		log+=$( { ssh $username@$dst_ip << EOF
+        sudo kill -9 \`pgrep qemu\`
+EOF
+		} 2>&1 )
+        #echo "$log"
 		echo -e "${BCYAN}wait for VMs to shutdown${NC}"
-		sleep 30s
+		sleep 10s
 	done
 
 	(( sum_totaltime /= rounds ))
