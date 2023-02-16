@@ -1,26 +1,27 @@
 #! /bin/bash
 
-## TODO: Edit the parameters here
+
+# -------------------- Setting --------------------- #
+
+## Network Settings
 src_ip="10.10.1.1"
 dst_ip="10.10.1.2"
 username="fjyang"
 src_monitor_port="1234"
 dst_monitor_port="1235"
 migration_port=8888
-rounds=10
-result_file="res-ab-1G"
-output_dir="./test"
-expected_max_totaltime="50s"
 
+## Output Settings
+result_file="res-ab-1G"
+
+## Evaluation Settings
+rounds=10
+expected_max_totaltime="20s"
 ParamsToSet[0]="multifd-channels"
 ParamsToSet[1]="max-bandwidth"
 ParamsToSet[2]="downtime-limit"
-
 CapsToSet[0]="multifd"
 CapsToSet[1]="compress"
-
-ParamSettings[0]="1 102400 300"
-CapsSettings[0]="off off"
 
 # Note: field val can only be number
 FieldsToCollect[0]="downtime"
@@ -30,11 +31,14 @@ FieldsToCollect[3]="setup"
 FieldsToCollect[4]="transferred ram"
 FieldsToCollect[5]="multifd bytes"
 
+# ----------------- Setting Ends ------------------- #
+
+
+
 declare -A DataSums
 for field in "${FieldsToCollect[@]}"; do
     DataSums[$field]=0
 done
-
 command_migrate="migrate -d tcp:$dst_ip:$migration_port"
 command_info="info migrate
 info migrate_parameters
@@ -95,31 +99,23 @@ function rebootM400() {
 EOF
 }
 
-###############################
-# $1: log file name           #
-# $2: expected settings (Str) #
-# $3: setting names     (Arr) #
-# --------------------------- #
-# ret: null / "Failed"        # 
-###############################
+###########################
+# $1: log file name       #
+# ----------------------- #
+# ret: null / "Failed"    # 
+# ----------------------- #
+# use MigrationSettings[] #
+###########################
 function checkValidity() {
-
-    local file=$1
-    shift
-    local Expects=($1)
-    shift
-    local Names=($@)
-
     for (( i = 0; i < ${#Names[@]}; i++ )); do
-        param_name=${Names[$i]}
-        #TODO: find ways to get field behind keyword
-        setting=$(cat $file | awk -v prefix="$param_name:" '$1 == prefix {print $2}')
-        expected=${Expects[$i]}
-        if [[ $param_name == "max-bandwidth" ]]; then
+        name=${Names[$i]}
+        setting=$(cat $1 | awk -v prefix="$name:" '$1 == prefix {print $2}')
+        expected=${MigrationSettings[$name]}
+        if [[ $name == "max-bandwidth" ]]; then
             (( expected *= 1024 * 1024 ))
         fi
         if [[ "$setting" != "$expected" ]]; then
-            echo -e "${BRED}$param_name: $setting, expect $expected${NC}" >&2
+            echo -e "${BRED}$name: $setting, expect $expected${NC}" >&2
             echo "Failed"
             return
         fi
@@ -149,99 +145,111 @@ function collectData() {
 }
 
 
-# *Script Starts Here* #
+# ****************** Script Starts Here ****************** #
 
-if [[ ${#ParamSettings[@]} != ${#CapsSettings[@]} ]]; then
-    echo -e "number of ParamSettings should equal to CapsSettings" >&2
+(( argc = ${#ParamsToSet[@]} + ${#CapsToSet[@]} + 1 ))
+if [[ $# -ne $argc ]]; then
+    echo "usage: ./eval.sh [output dir] [param setttings] [cap settings]"
+    echo "[param setttings] need to have same order as ParamsToSet[]"
+    echo "[cap setttings] need to have same order as CapsToSet[]"
     exit
 fi
-setting_num=${#ParamSettings[@]}
-echo "settings_num: $setting_num"
+output_dir=$1
+shift
+declare -A MigrationSettings
+declare -A ParamSettings
+declare -A CapsSettings
+for param in "${ParamsToSet[@]}"; do
+    MigrationSettings["$param"]=$1
+    ParamSettings["$param"]=$1
+    shift
+done
+for cap in "${CapsToSet[@]}"; do
+    MigrationSettings["$cap"]=$1
+    CapsSettings["$cap"]=$1
+    shift
+done
 
-mkdir $output_dir
+mkdir $output_dir 2>/dev/null
 
-for (( n = 0; n < setting_num; n++ )); do
-    for (( i = 0; i < 1; i++ )); do
+for (( i = 0; i < 1; i++ )); do
 
-        # boot VM
+    # boot VM
     result=""
-        result=$(bootVM $src_ip "src")
-        result+=$(bootVM $dst_ip "dst")
-        if [[ -n "$result" ]]; then
-        echo -e "${BRED}boot VM failed${NC}" >&2
-        exit
-            rebootM400 $src_ip
-            rebootM400 $dst_ip
-            sleep 8m
-            (( i -= 1 ))
-            continue
-        fi
+    result=$(bootVM $src_ip "src")
+    result+=$(bootVM $dst_ip "dst")
+    if [[ -n "$result" ]]; then
+    echo -e "${BRED}boot VM failed${NC}" >&2
+    exit
+        rebootM400 $src_ip
+        rebootM400 $dst_ip
+        sleep 8m
+        (( i -= 1 ))
+        continue
+    fi
 
 
-        echo -e "${BCYAN}waiting for VMs${NC}"      
-        sleep 30s
+    echo -e "${BCYAN}waiting for VMs${NC}" >&2
+    sleep 30s
 
 
-        echo -e "${BCYAN}setting migration parameters${NC}"
-        values=(${ParamSettings[$n]})
-        for (( p = 0; p < ${#ParamsToSet[@]}; p++ )); do
-            cmd="migrate_set_parameter ${ParamsToSet[$p]} ${values[$p]}"
-            ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$cmd" 2>/dev/null >/dev/null
-            ncat -w 5 -i 2 $dst_ip $dst_monitor_port <<< "$cmd" 2>/dev/null >/dev/null
-        done
-        echo -e "${BCYAN}setting migration capabilities${NC}"
-        values=(${CapsSettings[$n]})
-        for (( c = 0; c < ${#CapsToSet[@]}; c++ )); do
-            cmd="migrate_set_capability ${CapsToSet[$c]} ${values[$c]}"
-            ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$cmd" 2>/dev/null >/dev/null
-            ncat -w 5 -i 2 $dst_ip $dst_monitor_port <<< "$cmd" 2>/dev/null >/dev/null
-        done
-
-        
-        echo -e "${BCYAN}starting ab${NC}"
-        #TODO
-
-
-        echo -e "${BCYAN}starting the migration${NC}"
-        ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_migrate"
-        echo -e "${BCYAN}wait for the migration to complete${NC}"
-        sleep "$expected_max_totaltime"
-
-
-        echo -e "${BCYAN}fetching migration results${NC}"
-        src_fn="$output_dir/src_$i.txt"
-        dst_fn="$output_dir/dst_$i.txt"
-        ncat -w 10 -i 10 $src_ip $src_monitor_port <<< "$command_info" | strings > $src_fn
-        ncat -w 10 -i 10 $dst_ip $dst_monitor_port <<< "$command_info" | strings > $dst_fn
-        dos2unix $src_fn
-        dos2unix $dst_fn
-
-
-        echo -e "${BCYAN}stopping ab${NC}"
-        #TODO
-        
-
-        echo -e "${BCYAN}checking ab validity${NC}"
-        #TODO
-
-
-        result=$(checkValidity $src_fn "${ParamSettings[$n]}" "${ParamsToSet[@]}")
-        result+=$(checkValidity $src_fn "${CapsSettings[$n]}" "${CapsToSet[@]}")
-        result+=$(checkValidity $dst_fn "${ParamSettings[$n]}" "${ParamsToSet[@]}")
-        result+=$(checkValidity $dst_fn "${CapsSettings[$n]}" "${CapsToSet[@]}")
-        if [[ -n "$result" ]]; then
-            echo -e "${BRED}migration failed${NC}"
-            (( i -= 1 ))
-        else
-            collectData $src_fn
-        fi
-
-
-        echo -e "${BCYAN}cleaning up VMs${NC}"
-        ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_shutdown"
-        ncat -w 5 -i 2 $dst_ip $dst_monitor_port <<< "$command_shutdown"
-        echo -e "${BCYAN}wait for VMs to shutdown${NC}"
-        sleep 40s
-
+    echo -e "${BCYAN}setting migration parameters${NC}" >&2
+    for param in ${#ParamsToSet[@]}; do
+        cmd="migrate_set_parameter $param ${ParamSettings[$param]}"
+        ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$cmd" 2>/dev/null >/dev/null
+        ncat -w 5 -i 2 $dst_ip $dst_monitor_port <<< "$cmd" 2>/dev/null >/dev/null
     done
+    echo -e "${BCYAN}setting migration capabilities${NC}" >&2
+    for cap in ${#CapsToSet[@]}; do
+        cmd="migrate_set_capability $cap ${CapSettings[$cap]}"
+        ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$cmd" 2>/dev/null >/dev/null
+        ncat -w 5 -i 2 $dst_ip $dst_monitor_port <<< "$cmd" 2>/dev/null >/dev/null
+    done
+
+
+    
+    echo -e "${BCYAN}starting ab${NC}" >&2
+    #TODO
+
+
+    echo -e "${BCYAN}starting the migration${NC}" >&2
+    ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_migrate"
+    echo -e "${BCYAN}wait for the migration to complete${NC}" >&2
+    sleep "$expected_max_totaltime"
+
+
+    echo -e "${BCYAN}fetching migration results${NC}" >&2
+    src_fn="$output_dir/src_$i.txt"
+    dst_fn="$output_dir/dst_$i.txt"
+    ncat -w 10 -i 10 $src_ip $src_monitor_port <<< "$command_info" | strings > $src_fn
+    ncat -w 10 -i 10 $dst_ip $dst_monitor_port <<< "$command_info" | strings > $dst_fn
+    dos2unix $src_fn
+    dos2unix $dst_fn
+
+
+    echo -e "${BCYAN}stopping ab${NC}" >&2
+    #TODO
+    
+
+    echo -e "${BCYAN}checking ab validity${NC}" >&2
+    #TODO
+
+
+    result=""
+    result+=$(checkValidity $src_fn)
+    result+=$(checkValidity $dst_fn)
+    if [[ -n "$result" ]]; then
+        echo -e "${BRED}migration failed${NC}" >&2
+        (( i -= 1 ))
+    else
+        collectData $src_fn
+    fi
+
+
+    echo -e "${BCYAN}cleaning up VMs${NC}" >&2
+    ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_shutdown"
+    ncat -w 5 -i 2 $dst_ip $dst_monitor_port <<< "$command_shutdown"
+    echo -e "${BCYAN}wait for VMs to shutdown${NC}" >&2
+    sleep 40s
+
 done
