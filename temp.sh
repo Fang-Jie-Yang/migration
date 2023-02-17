@@ -11,17 +11,12 @@ src_monitor_port="1234"
 dst_monitor_port="1235"
 migration_port=8888
 
-## Output Settings
-result_file="res-ab-1G"
-
 ## Evaluation Settings
-rounds=10
+ab="off"
+rounds=1
 expected_max_totaltime="20s"
 ParamsToSet[0]="multifd-channels"
-ParamsToSet[1]="max-bandwidth"
-ParamsToSet[2]="downtime-limit"
 CapsToSet[0]="multifd"
-CapsToSet[1]="compress"
 
 # Note: field val can only be number
 FieldsToCollect[0]="downtime"
@@ -29,10 +24,8 @@ FieldsToCollect[1]="total time"
 FieldsToCollect[2]="throughput"
 FieldsToCollect[3]="setup"
 FieldsToCollect[4]="transferred ram"
-FieldsToCollect[5]="multifd bytes"
 
 # ----------------- Setting Ends ------------------- #
-
 
 
 declare -A DataSums
@@ -60,7 +53,7 @@ NC='\033[0m'
 #########################
 function bootVM() {
 
-    echo -e "${BCYAN}starting VM on $1 as $2${NC}" >&2
+    echo -e "${BCYAN}booting VM on $1 as $2${NC}" >&2
 
     if [[ $2 == "src" ]]; then
         script="./blk.sh"
@@ -94,9 +87,10 @@ function rebootM400() {
 
     echo -e "${BRED}rebooting $1${NC}" >&2
 
-    ssh $username@$1 << EOF
+    log=$( { ssh $username@$1 << EOF
     sudo reboot
 EOF
+    } 2>&1 )
 }
 
 ###########################
@@ -107,8 +101,8 @@ EOF
 # use MigrationSettings[] #
 ###########################
 function checkValidity() {
-    for (( i = 0; i < ${#Names[@]}; i++ )); do
-        name=${Names[$i]}
+
+    for name in ${!MigrationSettings[@]}; do
         setting=$(cat $1 | awk -v prefix="$name:" '$1 == prefix {print $2}')
         expected=${MigrationSettings[$name]}
         if [[ $name == "max-bandwidth" ]]; then
@@ -119,6 +113,7 @@ function checkValidity() {
             echo "Failed"
             return
         fi
+        echo "${BGREEN}$name = $setting${NC}"
     done
 }
 
@@ -150,8 +145,16 @@ function collectData() {
 (( argc = ${#ParamsToSet[@]} + ${#CapsToSet[@]} + 1 ))
 if [[ $# -ne $argc ]]; then
     echo "usage: ./eval.sh [output dir] [param setttings] [cap settings]"
-    echo "[param setttings] need to have same order as ParamsToSet[]"
-    echo "[cap setttings] need to have same order as CapsToSet[]"
+    echo -n "[param setttings]: "
+    for param in ${ParamsToSet[@]}; do
+        echo -n "$param "
+    done
+    echo ""
+    echo -n "[cap setttings]: "
+    for cap in ${CapsToSet[@]}; do
+        echo -n "$cap "
+    done
+    echo ""
     exit
 fi
 output_dir=$1
@@ -172,15 +175,14 @@ done
 
 mkdir $output_dir 2>/dev/null
 
-for (( i = 0; i < 1; i++ )); do
+for (( i = 0; i < $rounds; i++ )); do
 
     # boot VM
     result=""
     result=$(bootVM $src_ip "src")
     result+=$(bootVM $dst_ip "dst")
     if [[ -n "$result" ]]; then
-    echo -e "${BRED}boot VM failed${NC}" >&2
-    exit
+        echo -e "${BRED}boot VM failed${NC}" >&2
         rebootM400 $src_ip
         rebootM400 $dst_ip
         sleep 8m
@@ -207,13 +209,15 @@ for (( i = 0; i < 1; i++ )); do
     done
 
 
-    
-    echo -e "${BCYAN}starting ab${NC}" >&2
-    #TODO
+    if [[ $ab == "on" ]]; then 
+        echo -e "${BCYAN}starting ab${NC}" >&2
+        ab -c 100 -n 100000000000000000 -s 60 -g "$ab_fn" http://10.10.1.5/ &
+        ab_pid=$!
+    fi
 
 
     echo -e "${BCYAN}starting the migration${NC}" >&2
-    ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_migrate"
+    ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_migrate" 2>/dev/null > /dev/null
     echo -e "${BCYAN}wait for the migration to complete${NC}" >&2
     sleep "$expected_max_totaltime"
 
@@ -221,21 +225,23 @@ for (( i = 0; i < 1; i++ )); do
     echo -e "${BCYAN}fetching migration results${NC}" >&2
     src_fn="$output_dir/src_$i.txt"
     dst_fn="$output_dir/dst_$i.txt"
-    ncat -w 10 -i 10 $src_ip $src_monitor_port <<< "$command_info" | strings > $src_fn
-    ncat -w 10 -i 10 $dst_ip $dst_monitor_port <<< "$command_info" | strings > $dst_fn
+    ab_fn="$output_dir/ab_$i.txt"
+    ncat -w 10 -i 10 $src_ip $src_monitor_port <<< "$command_info" 2> /dev/null | strings > $src_fn
+    ncat -w 10 -i 10 $dst_ip $dst_monitor_port <<< "$command_info" 2> /dev/null | strings > $dst_fn
     dos2unix $src_fn
     dos2unix $dst_fn
 
-
-    echo -e "${BCYAN}stopping ab${NC}" >&2
-    #TODO
-    
-
-    echo -e "${BCYAN}checking ab validity${NC}" >&2
-    #TODO
-
-
     result=""
+    if [[ $ab == "on" ]]; then
+        echo -e "${BCYAN}checking ab validity${NC}" >&2
+        if ! ps -p $ab_pid > /dev/null; then
+            echo -e "${BRED}ab stopped early${NC}" >&2
+            result+="Failed"
+        fi
+        echo -e "${BCYAN}stopping ab${NC}" >&2
+        sudo kill -SIGINT "$ab_pid"
+        sleep 10s
+    fi
     result+=$(checkValidity $src_fn)
     result+=$(checkValidity $dst_fn)
     if [[ -n "$result" ]]; then
@@ -245,11 +251,17 @@ for (( i = 0; i < 1; i++ )); do
         collectData $src_fn
     fi
 
-
     echo -e "${BCYAN}cleaning up VMs${NC}" >&2
-    ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_shutdown"
-    ncat -w 5 -i 2 $dst_ip $dst_monitor_port <<< "$command_shutdown"
+    ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_shutdown" 2> /dev/null > /dev/null
+    ncat -w 5 -i 2 $dst_ip $dst_monitor_port <<< "$command_shutdown" 2> /dev/null > /dev/null
     echo -e "${BCYAN}wait for VMs to shutdown${NC}" >&2
     sleep 40s
 
+done
+
+for field in "${!DataSums[@]}"; do
+    echo "${DataSums[$field]}"
+    echo "scale=4; ${DataSums[$field]} / $rounds"
+    avg=$(echo "scale=4; ${DataSums[$field]} / $rounds"|bc)
+    echo -n "$avg "
 done
