@@ -197,13 +197,13 @@ for (( i = 0; i < $rounds; i++ )); do
 
 
     echo -e "${BCYAN}setting migration parameters${NC}" >&2
-    for param in ${#ParamsToSet[@]}; do
+    for param in ${ParamsToSet[@]}; do
         cmd="migrate_set_parameter $param ${ParamSettings[$param]}"
         ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$cmd" 2>/dev/null >/dev/null
         ncat -w 5 -i 2 $dst_ip $dst_monitor_port <<< "$cmd" 2>/dev/null >/dev/null
     done
     echo -e "${BCYAN}setting migration capabilities${NC}" >&2
-    for cap in ${#CapsToSet[@]}; do
+    for cap in ${CapsToSet[@]}; do
         cmd="migrate_set_capability $cap ${CapSettings[$cap]}"
         ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$cmd" 2>/dev/null >/dev/null
         ncat -w 5 -i 2 $dst_ip $dst_monitor_port <<< "$cmd" 2>/dev/null >/dev/null
