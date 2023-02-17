@@ -113,7 +113,7 @@ function checkValidity() {
             echo "Failed"
             return
         fi
-        echo "${BGREEN}$name = $setting${NC}"
+        #echo "${BGREEN}$name = $setting${NC}" >&2
     done
 }
 
@@ -121,21 +121,22 @@ function checkValidity() {
 ###########################
 # $1: log file name       #
 # ----------------------- #
-# ret: null / "Failed"    # 
+# ret: data / null        # 
 # ----------------------- #
 # use $FieldsToCollect[]  #
-# use $DataSums{}         #
 ###########################
 function collectData() {
     for field in "${FieldsToCollect[@]}"; do
         val=$(cat $1 | grep "$field:" | grep -o '[0-9.]\+')
         if [[ -z "$val" ]]; then
             echo -e "${BRED}no $field value${NC}" >&2
-            echo "Failed"
             return
         fi
+    done
+    for field in "${FieldsToCollect[@]}"; do
+        val=$(cat $1 | grep "$field:" | grep -o '[0-9.]\+')
         echo -e "${BGREEN}$field: $val${NC}" >&2
-        DataSums[$field]=$(echo "$val + ${DataSums[$field]}"|bc)
+        echo -n "$val "
     done
 }
 
@@ -248,7 +249,16 @@ for (( i = 0; i < $rounds; i++ )); do
         echo -e "${BRED}migration failed${NC}" >&2
         (( i -= 1 ))
     else
-        collectData $src_fn
+        data=$(collectData $src_fn)
+        if [[ -z "$data" ]]; then
+            echo -e "${BRED}migration failed${NC}" >&2
+            (( i -= 1 ))
+        fi
+        data=( $data )
+        for (( i = 0; i < ${#FieldsToCollect[@]}; i++)) do
+            field=${FieldsToCollect[$i]}
+            DataSums[$field]=$(echo "${data[$i]} + ${DataSums[$field]}"|bc)
+        done
     fi
 
     echo -e "${BCYAN}cleaning up VMs${NC}" >&2
@@ -259,9 +269,8 @@ for (( i = 0; i < $rounds; i++ )); do
 
 done
 
-for field in "${!DataSums[@]}"; do
-    echo "${DataSums[$field]}"
-    echo "scale=4; ${DataSums[$field]} / $rounds"
+for field in "${FieldsToCollect[@]}"; do
     avg=$(echo "scale=4; ${DataSums[$field]} / $rounds"|bc)
     echo -n "$avg "
 done
+echo ""
