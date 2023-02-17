@@ -253,12 +253,13 @@ for (( i = 0; i < $rounds; i++ )); do
         if [[ -z "$data" ]]; then
             echo -e "${BRED}migration failed${NC}" >&2
             (( i -= 1 ))
+        else
+            data=( $data )
+            for (( i = 0; i < ${#FieldsToCollect[@]}; i++)); do
+                field=${FieldsToCollect[$i]}
+                DataSums[$field]=$(echo "${data[$i]} + ${DataSums[$field]}"|bc)
+            done
         fi
-        data=( $data )
-        for (( i = 0; i < ${#FieldsToCollect[@]}; i++)) do
-            field=${FieldsToCollect[$i]}
-            DataSums[$field]=$(echo "${data[$i]} + ${DataSums[$field]}"|bc)
-        done
     fi
 
     echo -e "${BCYAN}cleaning up VMs${NC}" >&2
