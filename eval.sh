@@ -3,6 +3,10 @@
 
 # -------------------- Setting --------------------- #
 
+## VM scripts
+vm_src="blk.sh"
+vm_dst="resume-blk.sh"
+
 ## Network Settings
 src_ip="10.10.1.1"
 dst_ip="10.10.1.2"
@@ -45,7 +49,7 @@ NC='\033[0m'
 
 #########################
 # $1: ip addr           #
-# $2: "src" / "dst"     #
+# $2: vm script         #
 # --------------------- #
 # ret: null / "Failed"  #
 # --------------------- #
@@ -53,16 +57,11 @@ NC='\033[0m'
 #########################
 function bootVM() {
 
-    echo -e "${BCYAN}booting VM on $1 as $2${NC}" >&2
+    echo -e "${BCYAN}booting VM on $1 using $2${NC}" >&2
 
-    if [[ $2 == "src" ]]; then
-        script="./blk.sh"
-    elif [[ $2 == "dst" ]]; then
-        script="./resume-blk.sh"
-    fi
+    script="./$2"
 
     log=$( { ssh $username@$1 << EOF
-    cd /mydata/some-tutorials/files/blk
     sudo nohup $script --bridge
 EOF
     } 2>&1 )
@@ -89,6 +88,21 @@ function rebootM400() {
 
     log=$( { ssh $username@$1 << EOF
     sudo reboot
+EOF
+    } 2>&1 )
+}
+
+#########################
+# $1: ip addr           #
+# --------------------- #
+# ret: null             #
+# --------------------- #
+# use $username         #
+#########################
+function setupBridgeNetwork() {
+
+    log=$( { ssh $username@$1 << EOF
+    sudo /srv/vm/net.sh
 EOF
     } 2>&1 )
 }
@@ -158,6 +172,7 @@ if [[ $# -ne $argc ]]; then
     echo ""
     exit
 fi
+
 output_dir=$1
 shift
 declare -A MigrationSettings
@@ -174,19 +189,28 @@ for cap in "${CapsToSet[@]}"; do
     shift
 done
 
+echo -e "${BCYAN}uploading VM boot scripts${NC}"
+scp "$vm_src" $username@$src_ip:~/$vm_src
+scp "$vm_dst" $username@$dst_ip:~/$vm_dst
+
+setupBridgeNetwork $src_ip
+setupBridgeNetwork $dst_ip
+
 mkdir $output_dir 2>/dev/null
 
 for (( i = 0; i < $rounds; i++ )); do
 
     # boot VM
     result=""
-    result=$(bootVM $src_ip "src")
-    result+=$(bootVM $dst_ip "dst")
+    result=$(bootVM $src_ip $vm_src)
+    result+=$(bootVM $dst_ip $vm_dst)
     if [[ -n "$result" ]]; then
         echo -e "${BRED}boot VM failed${NC}" >&2
         rebootM400 $src_ip
         rebootM400 $dst_ip
         sleep 8m
+        setupBridgeNetwork $src_ip
+        setupBridgeNetwork $dst_ip
         (( i -= 1 ))
         continue
     fi

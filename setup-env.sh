@@ -68,37 +68,24 @@ function installSeKVM() {
 EOF
 }
 
-# $1: username
-# $2: ip
-function setupNetworkInterface() {
-    ssh $1@$2 << EOF
-        sudo echo "@reboot /srv/vm/net.sh" | crontab -
-EOF
-}
-
-
 # upload key pair to m400
 echo -e "${BCYAN}uploading key pair to src, dst${NC}"
-scp "~/.ssh/id_rsa" "$username@$src_ip:~/.ssh/id_rsa"
-scp "~/.ssh/id_rsa" "$username@$dst_ip:~/.ssh/id_rsa"
-scp "~/.ssh/id_rsa.pub" "$username@$src_ip:~/.ssh/id_rsa.pub"
-scp "~/.ssh/id_rsa.pub" "$username@$dst_ip:~/.ssh/id_rsa.pub"
+scp ~/.ssh/id_rsa "$username@$src_ip:~/.ssh"
+scp ~/.ssh/id_rsa "$username@$dst_ip:~/.ssh"
+scp ~/.ssh/id_rsa.pub "$username@$src_ip:~/.ssh"
+scp ~/.ssh/id_rsa.pub "$username@$dst_ip:~/.ssh"
 
 setupGitHubKey $username $src_ip
 installQEMU $username $src_ip
 installTutorials $username $src_ip
 installSeKVM $username $src_ip
-setupNetworkInterface $username $src_ip
 
 setupGitHubKey $username $dst_ip
 installQEMU $username $dst_ip
 installTutorials $username $dst_ip
 installSeKVM $username $dst_ip
-setupNetworkInterface $username $dst_ip
 
 yes | sudo apt update
 yes | sudo apt install ab 
 yes | sudo apt install dos2unix
 yes | sudo apt install ncat
-git clone git@github.com:Fang-Jie-Yang/migration.git
-
