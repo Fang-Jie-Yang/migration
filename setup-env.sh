@@ -97,7 +97,7 @@ installSeKVM $username $dst_ip
 setupNetworkInterface $username $dst_ip
 
 yes | sudo apt update
-yes | sudo apt install ab 
+yes | sudo apt install apache2-utils
 yes | sudo apt install dos2unix
 yes | sudo apt install ncat
 git clone git@github.com:Fang-Jie-Yang/migration.git
