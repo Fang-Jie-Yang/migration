@@ -79,10 +79,10 @@ EOF
 
 # upload key pair to m400
 echo -e "${BCYAN}uploading key pair to src, dst${NC}"
-scp "~/.ssh/id_rsa" "$username@$src_ip:~/.ssh/id_rsa"
-scp "~/.ssh/id_rsa" "$username@$dst_ip:~/.ssh/id_rsa"
-scp "~/.ssh/id_rsa.pub" "$username@$src_ip:~/.ssh/id_rsa.pub"
-scp "~/.ssh/id_rsa.pub" "$username@$dst_ip:~/.ssh/id_rsa.pub"
+scp "~/.ssh/id_rsa" "$username@$src_ip:~/.ssh"
+scp "~/.ssh/id_rsa" "$username@$dst_ip:~/.ssh"
+scp "~/.ssh/id_rsa.pub" "$username@$src_ip:~/.ssh"
+scp "~/.ssh/id_rsa.pub" "$username@$dst_ip:~/.ssh"
 
 setupGitHubKey $username $src_ip
 installQEMU $username $src_ip
