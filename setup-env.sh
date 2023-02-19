@@ -75,6 +75,7 @@ scp ~/.ssh/id_rsa "$username@$dst_ip:~/.ssh"
 scp ~/.ssh/id_rsa.pub "$username@$src_ip:~/.ssh"
 scp ~/.ssh/id_rsa.pub "$username@$dst_ip:~/.ssh"
 
+
 setupGitHubKey $username $src_ip
 installQEMU $username $src_ip
 installTutorials $username $src_ip
@@ -86,6 +87,6 @@ installTutorials $username $dst_ip
 installSeKVM $username $dst_ip
 
 yes | sudo apt update
-yes | sudo apt install ab 
+yes | sudo apt install apache2-utils
 yes | sudo apt install dos2unix
 yes | sudo apt install ncat
