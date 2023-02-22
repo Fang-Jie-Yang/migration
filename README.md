@@ -7,7 +7,7 @@
 ### Step 2: Start experiments(`migration-3`) on cloudlab
 
 ### Step 3: Upload key pair to m400(`client` in `migration-3`)
-1. run `./upload-key.sh`
+1. `./upload-key.sh {username} {client_ip}`
 
 ### Step 4: Set up environment (QEMU, SeKVM, etc.)
 1. `ssh` to `client`
