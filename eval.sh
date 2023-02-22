@@ -4,8 +4,8 @@
 # -------------------- Setting --------------------- #
 
 ## VM scripts
-vm_src="blk.sh"
-vm_dst="resume-blk.sh"
+vm_src="vm_scripts/blk.sh"
+vm_dst="vm_scripts/resume-blk.sh"
 
 ## Network Settings
 src_ip="10.10.1.1"
