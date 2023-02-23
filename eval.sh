@@ -4,8 +4,8 @@
 # -------------------- Setting --------------------- #
 
 ## VM scripts
-vm_src="vm_scripts/blk.sh"
-vm_dst="vm_scripts/resume-blk.sh"
+vm_src="qemu_scripts/blk.sh"
+vm_dst="qemu_scripts/resume-blk.sh"
 
 ## Network Settings
 src_ip="10.10.1.1"
@@ -17,7 +17,7 @@ migration_port=8888
 
 ## Evaluation Settings
 ab="off"
-rounds=1
+rounds=2
 expected_max_totaltime="20s"
 ParamsToSet[0]="multifd-channels"
 CapsToSet[0]="multifd"
@@ -190,8 +190,8 @@ for cap in "${CapsToSet[@]}"; do
 done
 
 echo -e "${BCYAN}uploading VM boot scripts${NC}"
-scp "$vm_src" $username@$src_ip:~/$vm_src
-scp "$vm_dst" $username@$dst_ip:~/$vm_dst
+scp "$vm_src" $username@$src_ip:~/blk.sh
+scp "$vm_dst" $username@$dst_ip:~/resume-blk.sh
 
 setupBridgeNetwork $src_ip
 setupBridgeNetwork $dst_ip
@@ -202,8 +202,8 @@ for (( i = 0; i < $rounds; i++ )); do
 
     # boot VM
     result=""
-    result=$(bootVM $src_ip $vm_src)
-    result+=$(bootVM $dst_ip $vm_dst)
+    result=$(bootVM $src_ip blk.sh)
+    result+=$(bootVM $dst_ip resume-blk.sh)
     if [[ -n "$result" ]]; then
         echo -e "${BRED}boot VM failed${NC}" >&2
         rebootM400 $src_ip
@@ -279,9 +279,9 @@ for (( i = 0; i < $rounds; i++ )); do
             (( i -= 1 ))
         else
             data=( $data )
-            for (( i = 0; i < ${#FieldsToCollect[@]}; i++)); do
-                field=${FieldsToCollect[$i]}
-                DataSums[$field]=$(echo "${data[$i]} + ${DataSums[$field]}"|bc)
+            for (( j = 0; j < ${#FieldsToCollect[@]}; j++)); do
+                field=${FieldsToCollect[$j]}
+                DataSums[$field]=$(echo "${data[$j]} + ${DataSums[$field]}"|bc)
             done
         fi
     fi
