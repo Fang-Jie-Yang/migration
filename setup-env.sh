@@ -49,6 +49,9 @@ EOF
 function installSeKVM() {
     echo -e "${BCYAN}installing sekvm, could take a while...${NC}"
     ssh $1@$2 << EOF
+
+        sudo apt install libncurses-dev
+
         cd /mydata
         git clone git@github.com:ntu-ssl/linux-sekvm.git 
         cd linux-sekvm
@@ -68,6 +71,15 @@ function installSeKVM() {
 EOF
 }
 
+# $1: username
+# $2: ip
+function setup() {
+    setupGitHubKey $1 $2
+    installQEMU $1 $2
+    installTutorials $1 $2
+    installSeKVM $1 $2
+}
+
 # upload key pair to m400
 echo -e "${BCYAN}uploading key pair to src, dst${NC}"
 scp ~/.ssh/id_rsa "$username@$src_ip:~/.ssh"
@@ -75,16 +87,10 @@ scp ~/.ssh/id_rsa "$username@$dst_ip:~/.ssh"
 scp ~/.ssh/id_rsa.pub "$username@$src_ip:~/.ssh"
 scp ~/.ssh/id_rsa.pub "$username@$dst_ip:~/.ssh"
 
+setup $username $src_ip &
+setup $username $dst_ip &
 
-setupGitHubKey $username $src_ip
-installQEMU $username $src_ip
-installTutorials $username $src_ip
-installSeKVM $username $src_ip
-
-setupGitHubKey $username $dst_ip
-installQEMU $username $dst_ip
-installTutorials $username $dst_ip
-installSeKVM $username $dst_ip
+wait 
 
 yes | sudo apt update
 yes | sudo apt install apache2-utils
