@@ -5,10 +5,10 @@
 
 ## VM scripts
 script_dir="qemu_scripts"
-vm_src="ab.sh"
-vm_dst="ab-res.sh"
-#vm_src="blk.sh"
-#vm_dst="resume-blk.sh"
+#vm_src="ab.sh"
+#vm_dst="ab-res.sh"
+vm_src="blk.sh"
+vm_dst="resume-blk.sh"
 
 ## Network Settings
 src_ip="10.10.1.1"
@@ -16,15 +16,15 @@ dst_ip="10.10.1.2"
 guest_ip="10.10.1.5"
 username="fjyang"
 src_monitor_port="1234"
-dst_monitor_port="1236"
+dst_monitor_port="1235"
 migration_port=8888
 
 ## Evaluation Settings
-ab="on"
+ab="off"
 rounds=10
-expected_max_totaltime="40s"
+expected_max_totaltime="20s"
 #ParamsToSet[0]="multifd-channels"
-ParamsToSet[0]="downtime-limit"
+#ParamsToSet[0]="downtime-limit"
 #CapsToSet[0]="multifd"
 CapsToSet[0]="postcopy-ram"
 
@@ -123,6 +123,14 @@ EOF
 ###########################
 function checkValidity() {
 
+    status=$(cat $1 | awk '$1 == "Migration" && $2 == "status:" {print $3}')
+
+    if [[ "$status" != "completed" ]]; then
+        echo -e "${BRED}Migration status: $status${NC}" >&2
+	echo "Failed"
+	return
+    fi
+
     for name in ${!MigrationSettings[@]}; do
         setting=$(cat $1 | awk -v prefix="$name:" '$1 == prefix {print $2}')
         expected=${MigrationSettings[$name]}
@@ -209,7 +217,8 @@ for (( i = 0; i < $rounds; i++ )); do
 
 
     # FIXME: hard coded path
-    sudo cp /proj/ntucsie-PG0/fjyang/cloud-hack-ab-bak.img /proj/ntucsie-PG0/fjyang/cloud-hack-ab.img
+    #sudo cp /proj/ntucsie-PG0/fjyang/cloud-hack-ab-bak.img /proj/ntucsie-PG0/fjyang/cloud-hack-ab.img
+    sudo cp /proj/ntucsie-PG0/fjyang/cloud-hack-backup.img /proj/ntucsie-PG0/fjyang/cloud-hack.img
 
     # boot VM
     result=""
@@ -219,7 +228,7 @@ for (( i = 0; i < $rounds; i++ )); do
         echo -e "${BRED}boot VM failed${NC}" >&2
         rebootM400 $src_ip
         rebootM400 $dst_ip
-        sleep 8m
+        sleep 10m
         setupBridgeNetwork $src_ip
         setupBridgeNetwork $dst_ip
         (( i -= 1 ))
@@ -228,7 +237,7 @@ for (( i = 0; i < $rounds; i++ )); do
 
 
     echo -e "${BCYAN}waiting for VMs${NC}" >&2
-    sleep 30s
+    sleep 20s
 
 
     echo -e "${BCYAN}setting migration parameters${NC}" >&2
@@ -256,7 +265,7 @@ for (( i = 0; i < $rounds; i++ )); do
     echo -e "${BCYAN}starting the migration${NC}" >&2
     ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_migrate" 2>/dev/null > /dev/null
     # FIXME: hard coded postcopy start
-    ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "postcopy_start" 2>/dev/null > /dev/null
+    ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "migrate_start_postcopy"
     echo -e "${BCYAN}wait for the migration to complete${NC}" >&2
     sleep "$expected_max_totaltime"
 
@@ -282,13 +291,14 @@ for (( i = 0; i < $rounds; i++ )); do
     fi
 
 
-    if curl "$guest_ip" 2>&1 > /dev/null; then
-        echo -e "${BGREEN}dst alive${NC}" >&2
-    else
-        echo -e "${BRED}dst dead${NC}" >&2
-        result+="Failed"
+    if [[ $ab == "on" ]]; then 
+        if curl -m 10 "$guest_ip" 2>&1 > /dev/null; then
+            echo -e "${BGREEN}dst alive${NC}" >&2
+        else
+            echo -e "${BRED}dst dead${NC}" >&2
+            result+="Failed"
+        fi
     fi
-
 
     result+=$(checkValidity $src_fn)
     result+=$(checkValidity $dst_fn)
@@ -310,16 +320,16 @@ for (( i = 0; i < $rounds; i++ )); do
     fi
 
     echo -e "${BCYAN}cleaning up VMs${NC}" >&2
-    ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_shutdown" 2> /dev/null > /dev/null
     # use `halt -p` so that the image won't corrupt
-    tmp=$( { ssh root@$guest_ip << EOF
-    halt -p
-EOF
-    } 2>&1 )
-    sleep 10s
+    #tmp=$( { ssh root@$guest_ip << EOF
+    #halt -p
+#EOF
+    #} 2>&1 )
+    #sleep 10s
     ncat -w 5 -i 2 $dst_ip $dst_monitor_port <<< "$command_shutdown" 2> /dev/null > /dev/null
+    ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_shutdown" 2> /dev/null > /dev/null
     echo -e "${BCYAN}wait for VMs to shutdown${NC}" >&2
-    sleep 50s
+    sleep 20s
 
 done
 
