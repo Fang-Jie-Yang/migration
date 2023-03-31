@@ -13,7 +13,7 @@ ssh $1@$2 << EOF
 	sudo make install
 	
 	cd /srv/u-boot/
-	./update-kernel.sh
+	sudo ./update-kernel.sh
 	sudo ./update-initrd.sh /boot/initrd.img-4.18.0
 
 	sudo reboot
