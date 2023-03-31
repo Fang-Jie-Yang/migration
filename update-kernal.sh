@@ -1,7 +1,7 @@
 #! /bin/bash
 
 if [[ $# -ne 2 ]]; then
-	echo "usage: ./setup-eval-env.sh username ip_addr"
+	echo "usage: ./update-kernel.sh username ip_addr"
 	exit
 fi
 
