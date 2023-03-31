@@ -32,7 +32,7 @@ EOF
 # $1: username
 # $2: ip
 function installQEMU() {
-    echo -e "${BCYAN}installing qemu for sekvm, could take a while...${NC}"
+    echo -e "${BCYAN}installing qemu for kvm, could take a while...${NC}"
     ssh $1@$2 << EOF
         cd /mydata
         git clone --depth 1 --branch $qemu_branch git@github.com:qemu/qemu.git
@@ -55,7 +55,7 @@ EOF
 # $1: username
 # $2: ip
 function installKVM() {
-    echo -e "${BCYAN}installing sekvm, could take a while...${NC}"
+    echo -e "${BCYAN}installing kvm, could take a while...${NC}"
     ssh $1@$2 << EOF
 
         sudo apt install libncurses-dev
@@ -73,8 +73,7 @@ function installKVM() {
         cd /srv/u-boot/
         sudo sed -i 's/\/usr\/src\/linux/\/mydata\/linux/' update-kernel.sh
 	sudo ./update-kernel.sh
-        sudo ./update-initrd.sh /boot/initrd-img-4.18.0
-        sudo reboot
+        sudo ./update-initrd.sh /boot/initrd.img-4.18.0
 EOF
 }
 
@@ -83,9 +82,9 @@ EOF
 function setup() {
     setupGitHubKey $1 $2
     setupDataDir $1 $2
-    installQEMU $1 $2
     installTutorials $1 $2
     installKVM $1 $2
+    installQEMU $1 $2
 }
 
 # upload key pair to m400
