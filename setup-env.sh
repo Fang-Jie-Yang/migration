@@ -77,9 +77,8 @@ function installSeKVM() {
         sudo apt install libncurses-dev
 
         cd /mydata
-        git clone git@github.com:ntu-ssl/linux-sekvm.git 
+        git clone --depth 1 --branch $sekvm_branch git@github.com:ntu-ssl/linux-sekvm.git 
         cd linux-sekvm
-        git checkout $sekvm_branch
 
         make sekvm_defconfig
         make -j8

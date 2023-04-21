@@ -5,10 +5,10 @@
 
 ## VM scripts
 script_dir="qemu_scripts"
-#vm_src="ab.sh"
-#vm_dst="ab-res.sh"
-vm_src="blk.sh"
-vm_dst="resume-blk.sh"
+vm_src="ab.sh"
+vm_dst="ab-res.sh"
+#vm_src="blk.sh"
+#vm_dst="resume-blk.sh"
 
 ## Network Settings
 src_ip="10.10.1.1"
@@ -22,11 +22,12 @@ migration_port=8888
 ## Evaluation Settings
 ab="off"
 rounds=10
-expected_max_totaltime="20s"
-#ParamsToSet[0]="multifd-channels"
-#ParamsToSet[0]="downtime-limit"
-#CapsToSet[0]="multifd"
-CapsToSet[0]="postcopy-ram"
+expected_max_totaltime="60s"
+ParamsToSet[0]="downtime-limit"
+ParamsToSet[1]="max-bandwidth" #Mbps
+ParamsToSet[2]="multifd-channels"
+CapsToSet[0]="multifd"
+CapsToSet[1]="postcopy-ram"
 
 # Note: field val can only be number
 FieldsToCollect[0]="downtime"
@@ -68,6 +69,7 @@ function bootVM() {
     script="./$2"
 
     log=$( { ssh $username@$1 << EOF
+    sudo /srv/vm/net.sh
     sudo nohup $script --bridge
 EOF
     } 2>&1 )
@@ -78,7 +80,7 @@ EOF
     err+=$(echo "$log" | grep "No such file or directory")
     if [[ -n "$err" ]]; then
         echo "Failed"
-	echo "$log" >&2
+	echo "$log" | tail -n 1 >&2
     fi
 }
 
@@ -204,12 +206,12 @@ for cap in "${CapsToSet[@]}"; do
     shift
 done
 
-echo -e "${BCYAN}uploading VM boot scripts${NC}"
-scp "$script_dir/$vm_src" $username@$src_ip:~/"$vm_src"
-scp "$script_dir/$vm_dst" $username@$dst_ip:~/"$vm_dst"
+echo -e "${BCYAN}uploading VM boot scripts${NC}" >&2
+scp "$script_dir/$vm_src" $username@$src_ip:~/"$vm_src" >&2
+scp "$script_dir/$vm_dst" $username@$dst_ip:~/"$vm_dst" >&2
 
-setupBridgeNetwork $src_ip
-setupBridgeNetwork $dst_ip
+#setupBridgeNetwork $src_ip
+#setupBridgeNetwork $dst_ip
 
 mkdir $output_dir 2>/dev/null
 
@@ -257,7 +259,7 @@ for (( i = 0; i < $rounds; i++ )); do
     if [[ $ab == "on" ]]; then 
         ab_fn="$output_dir/ab_$i.txt"
         echo -e "${BCYAN}starting ab${NC}" >&2
-        ab -c 100 -n 100000000000000000 -s 60 -g "$ab_fn" http://10.10.1.5/ &
+        ab -c 100 -n 100000000000000000 -s 90 -g "$ab_fn" http://10.10.1.5/ &
         ab_pid=$!
     fi
 
@@ -265,7 +267,7 @@ for (( i = 0; i < $rounds; i++ )); do
     echo -e "${BCYAN}starting the migration${NC}" >&2
     ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_migrate" 2>/dev/null > /dev/null
     # FIXME: hard coded postcopy start
-    ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "migrate_start_postcopy"
+    ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "migrate_start_postcopy" 2> /dev/null > /dev/null
     echo -e "${BCYAN}wait for the migration to complete${NC}" >&2
     sleep "$expected_max_totaltime"
 
@@ -293,6 +295,13 @@ for (( i = 0; i < $rounds; i++ )); do
 
     if [[ $ab == "on" ]]; then 
         if curl -m 10 "$guest_ip" 2>&1 > /dev/null; then
+            echo -e "${BGREEN}dst alive${NC}" >&2
+        else
+            echo -e "${BRED}dst dead${NC}" >&2
+            result+="Failed"
+        fi
+    else 
+	if ping -c 3 "$guest_ip" >&2 ; then
             echo -e "${BGREEN}dst alive${NC}" >&2
         else
             echo -e "${BRED}dst dead${NC}" >&2
