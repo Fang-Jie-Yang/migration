@@ -26,8 +26,10 @@ expected_max_totaltime="60s"
 ParamsToSet[0]="downtime-limit"
 ParamsToSet[1]="max-bandwidth" #Mbps
 ParamsToSet[2]="multifd-channels"
+ParamsToSet[3]="max-postcopy-bandwidth" #bps
 CapsToSet[0]="multifd"
 CapsToSet[1]="postcopy-ram"
+CapsToSet[2]="compress"
 
 # Note: field val can only be number
 FieldsToCollect[0]="downtime"
@@ -215,8 +217,19 @@ scp "$script_dir/$vm_dst" $username@$dst_ip:~/"$vm_dst" >&2
 
 mkdir $output_dir 2>/dev/null
 
+consecutive_failure=0
+
 for (( i = 0; i < $rounds; i++ )); do
 
+    if [[ $consecutive_failure -gt 5 ]]; then
+        echo -e "${BRED}too much failure, rebooting${NC}" >&2
+	consecutive_failure=0
+        rebootM400 $src_ip
+        rebootM400 $dst_ip
+        sleep 10m
+        (( i -= 1 ))
+        continue
+    fi
 
     # FIXME: hard coded path
     #sudo cp /proj/ntucsie-PG0/fjyang/cloud-hack-ab-bak.img /proj/ntucsie-PG0/fjyang/cloud-hack-ab.img
@@ -231,8 +244,8 @@ for (( i = 0; i < $rounds; i++ )); do
         rebootM400 $src_ip
         rebootM400 $dst_ip
         sleep 10m
-        setupBridgeNetwork $src_ip
-        setupBridgeNetwork $dst_ip
+        #setupBridgeNetwork $src_ip
+        #setupBridgeNetwork $dst_ip
         (( i -= 1 ))
         continue
     fi
@@ -313,11 +326,13 @@ for (( i = 0; i < $rounds; i++ )); do
     result+=$(checkValidity $dst_fn)
     if [[ -n "$result" ]]; then
         echo -e "${BRED}migration failed${NC}" >&2
+        (( consecutive_failure += 1 ))
         (( i -= 1 ))
     else
         data=$(collectData $src_fn)
         if [[ -z "$data" ]]; then
             echo -e "${BRED}migration failed${NC}" >&2
+	    (( consecutive_failure += 1 ))
             (( i -= 1 ))
         else
             data=( $data )
@@ -325,16 +340,11 @@ for (( i = 0; i < $rounds; i++ )); do
                 field=${FieldsToCollect[$j]}
                 DataSums[$field]=$(echo "${data[$j]} + ${DataSums[$field]}"|bc)
             done
+            consecutive_failure=0
         fi
     fi
 
     echo -e "${BCYAN}cleaning up VMs${NC}" >&2
-    # use `halt -p` so that the image won't corrupt
-    #tmp=$( { ssh root@$guest_ip << EOF
-    #halt -p
-#EOF
-    #} 2>&1 )
-    #sleep 10s
     ncat -w 5 -i 2 $dst_ip $dst_monitor_port <<< "$command_shutdown" 2> /dev/null > /dev/null
     ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_shutdown" 2> /dev/null > /dev/null
     echo -e "${BCYAN}wait for VMs to shutdown${NC}" >&2
