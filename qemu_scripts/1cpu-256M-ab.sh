@@ -9,7 +9,7 @@ TRACE=""
 KERNEL="/mydata/some-tutorials/files/Image.sekvm"
 CONSOLE="1234"
 FILE="/tmp/snap"
-FS="/proj/ntucsie-PG0/fjyang/cloud-hack.img"
+FS="/proj/ntucsie-PG0/fjyang/cloud-hack-ab.img"
 QEMU="/mydata/qemu"
 
 while :
@@ -79,7 +79,6 @@ done
 $DEBUG \
 $QEMU/aarch64-softmmu/qemu-system-aarch64 \
     -enable-kvm -M virt -cpu host -m $MEM \
-    -smp 4 \
     -kernel $KERNEL \
     $NET \
     -drive if=none,file=$FS,id=vda,cache=none,format=raw \

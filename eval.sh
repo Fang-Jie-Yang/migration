@@ -5,10 +5,14 @@
 
 ## VM scripts
 script_dir="qemu_scripts"
-vm_src="ab.sh"
-vm_dst="ab-res.sh"
+#vm_src="ab.sh"
+#vm_dst="ab-res.sh"
 #vm_src="blk.sh"
 #vm_dst="resume-blk.sh"
+vm_src="$1"
+shift
+vm_dst="$1"
+shift
 
 ## Network Settings
 src_ip="10.10.1.1"
@@ -20,9 +24,10 @@ dst_monitor_port="1235"
 migration_port=8888
 
 ## Evaluation Settings
-ab="off"
+ab="$1"
+shift
 rounds=10
-expected_max_totaltime="60s"
+expected_max_totaltime="40s"
 ParamsToSet[0]="downtime-limit"
 ParamsToSet[1]="max-bandwidth" #Mbps
 ParamsToSet[2]="multifd-channels"
@@ -232,8 +237,11 @@ for (( i = 0; i < $rounds; i++ )); do
     fi
 
     # FIXME: hard coded path
-    #sudo cp /proj/ntucsie-PG0/fjyang/cloud-hack-ab-bak.img /proj/ntucsie-PG0/fjyang/cloud-hack-ab.img
-    sudo cp /proj/ntucsie-PG0/fjyang/cloud-hack-backup.img /proj/ntucsie-PG0/fjyang/cloud-hack.img
+    if [[ "$ab" == "on" ]]; then
+    	sudo cp /proj/ntucsie-PG0/fjyang/cloud-hack-ab-bak.img /proj/ntucsie-PG0/fjyang/cloud-hack-ab.img
+    else
+    	sudo cp /proj/ntucsie-PG0/fjyang/cloud-hack-backup.img /proj/ntucsie-PG0/fjyang/cloud-hack.img
+    fi
 
     # boot VM
     result=""
@@ -272,7 +280,7 @@ for (( i = 0; i < $rounds; i++ )); do
     if [[ $ab == "on" ]]; then 
         ab_fn="$output_dir/ab_$i.txt"
         echo -e "${BCYAN}starting ab${NC}" >&2
-        ab -c 100 -n 100000000000000000 -s 90 -g "$ab_fn" http://10.10.1.5/ &
+        ab -c 100 -n 100000000000000000 -s 90 -g "$ab_fn" http://10.10.1.5/ >&2 & 
         ab_pid=$!
     fi
 
@@ -301,13 +309,13 @@ for (( i = 0; i < $rounds; i++ )); do
             result+="Failed"
         fi
         echo -e "${BCYAN}stopping ab${NC}" >&2
-        sudo kill -SIGINT "$ab_pid"
+        sudo kill -SIGINT "$ab_pid" >&2
         sleep 10s
     fi
 
 
     if [[ $ab == "on" ]]; then 
-        if curl -m 10 "$guest_ip" 2>&1 > /dev/null; then
+        if curl -m 10 "$guest_ip" >&2 ; then
             echo -e "${BGREEN}dst alive${NC}" >&2
         else
             echo -e "${BRED}dst dead${NC}" >&2

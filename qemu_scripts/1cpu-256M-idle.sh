@@ -79,7 +79,6 @@ done
 $DEBUG \
 $QEMU/aarch64-softmmu/qemu-system-aarch64 \
     -enable-kvm -M virt -cpu host -m $MEM \
-    -smp 4 \
     -kernel $KERNEL \
     $NET \
     -drive if=none,file=$FS,id=vda,cache=none,format=raw \

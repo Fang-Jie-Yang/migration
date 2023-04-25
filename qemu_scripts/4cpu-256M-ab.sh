@@ -9,7 +9,7 @@ TRACE=""
 KERNEL="/mydata/some-tutorials/files/Image.sekvm"
 CONSOLE="1234"
 FILE="/tmp/snap"
-FS="/proj/ntucsie-PG0/fjyang/cloud-hack.img"
+FS="/proj/ntucsie-PG0/fjyang/cloud-hack-ab.img"
 QEMU="/mydata/qemu"
 
 while :

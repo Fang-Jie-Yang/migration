@@ -2,7 +2,7 @@
 
 CMDLINE="earlycon=pl011,0x09000000"
 NET="-net none"
-MEM="256"
+MEM="1024"
 BLK=""
 DEBUG=""
 TRACE=""

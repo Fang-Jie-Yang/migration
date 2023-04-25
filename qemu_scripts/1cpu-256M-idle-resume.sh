@@ -7,7 +7,9 @@ BLK=""
 DEBUG=""
 TRACE=""
 KERNEL="/mydata/some-tutorials/files/Image.sekvm"
-CONSOLE="1234"
+RESUME="tcp"
+PORT="8888"
+CONSOLE="1235"
 FILE="/tmp/snap"
 FS="/proj/ntucsie-PG0/fjyang/cloud-hack.img"
 QEMU="/mydata/qemu"
@@ -47,11 +49,19 @@ do
             shift 1
             ;;
         -t | --trace )
-            TRACE="-trace events=$2,file=src.bin"
+            TRACE="-trace events=$2,file=dst.bin"
             shift 2
             ;;
         -c | --console )
             CONSOLE="$2"
+            shift 2
+            ;;
+        -p | --port )
+            PORT="$2"
+            shift 2
+            ;;
+        -f | --file )
+            FILE="$2"
             shift 2
             ;;
         -i | --image )
@@ -60,6 +70,19 @@ do
             ;;
         -m | --mem )
             MEM="$2"
+            shift 2
+            ;;
+        -r | --resume )
+            if [ "$2" = "dead" ]
+            then
+                RESUME="exec"
+            elif [ "$2" = "live" ]
+            then
+                RESUME="tcp"
+            else
+                echo "WTF"
+                exit 1
+            fi
             shift 2
             ;;
         --)
@@ -76,16 +99,24 @@ do
     esac
 done
 
+if [[ $RESUME == *"tcp"* ]]
+then
+    RESUME="tcp:0:$PORT"
+elif [[ $RESUME == *"exec"* ]]
+then
+    RESUME="exec:gzip -c -d $FILE"
+fi
+
 $DEBUG \
 $QEMU/aarch64-softmmu/qemu-system-aarch64 \
     -enable-kvm -M virt -cpu host -m $MEM \
-    -smp 4 \
     -kernel $KERNEL \
     $NET \
     -drive if=none,file=$FS,id=vda,cache=none,format=raw \
     -device virtio-blk-pci,drive=vda \
     -append "console=ttyAMA0 root=/dev/vda rw $CMDLINE" \
-    -monitor telnet:10.10.1.1:$CONSOLE,server,nowait \
+    -monitor telnet:10.10.1.2:$CONSOLE,server,nowait \
     -display none\
     -daemonize \
+    -incoming "$RESUME" \
     $TRACE \
