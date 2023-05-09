@@ -26,7 +26,7 @@ migration_port=8888
 ## Evaluation Settings
 ab="$1"
 shift
-rounds=10
+rounds=1
 expected_max_totaltime="40s"
 ParamsToSet[0]="downtime-limit"
 ParamsToSet[1]="max-bandwidth" #Mbps
@@ -263,7 +263,7 @@ for (( i = 0; i < $rounds; i++ )); do
 	consecutive_failure=0
         rebootM400 $src_ip
         rebootM400 $dst_ip
-        sleep 10m
+        sleep 8m
         (( i -= 1 ))
         continue
     fi
@@ -315,9 +315,9 @@ for (( i = 0; i < $rounds; i++ )); do
             echo -e "${BRED}apache not up yet${NC}" >&2
     	done
         echo -e "${BCYAN}starting ab${NC}" >&2
-        /users/fjyang/httpd-2.4.54/support/ab -c 50 -n 60000 -s 10 -g "$ab_fn" http://10.10.1.5/ >&2 & 
+        /users/fjyang/httpd-2.4.54/support/ab -c 50 -n 75000 -s 10 -g "$ab_fn" http://10.10.1.5/ >&2 & 
         ab_pid=$!
-	sleep 5s
+	sleep 3s
     fi
 
     #stressNetwork $src_ip $dst_ip
@@ -327,7 +327,8 @@ for (( i = 0; i < $rounds; i++ )); do
 
     echo -e "${BCYAN}starting the migration${NC}" >&2
     ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_migrate" 2>/dev/null > /dev/null
-    # FIXME: hard coded postcopy start
+    # FIXME: hard coded postcopy start / sleep time
+    sleep 12s
     ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "migrate_start_postcopy" 2> /dev/null > /dev/null
     echo -e "${BCYAN}wait for the migration to complete${NC}" >&2
     sleep "$expected_max_totaltime"
@@ -342,6 +343,8 @@ for (( i = 0; i < $rounds; i++ )); do
 
     result=""
     if [[ $ab == "on" ]]; then
+        echo -e "${BCYAN}wait for ab to complete${NC}" >&2
+	sleep 5s
         echo -e "${BCYAN}checking ab validity${NC}" >&2
         #if ! ps -p $ab_pid > /dev/null; then
         #    echo -e "${BRED}ab stopped early${NC}" >&2
@@ -409,4 +412,13 @@ for field in "${FieldsToCollect[@]}"; do
     avg=$(echo "scale=4; ${DataSums[$field]} / $rounds"|bc)
     echo -n "$avg "
 done
+if [[ "$ab" == "on" ]]; then
+	dt_sum=0
+	for (( i = 0; i < $rounds; i++ )); do
+		dt=$(echo "$output_dir/ab_$i.png" | python3 ~/some-tutorials/files/migration/plot.py $output_dir/ab_$i.txt | awk '{print $2}')
+		echo "$dt" >&2
+		dt_sum=$(echo $dt + $dt_sum|bc)
+	done
+	echo -n $(echo "scale=4; $dt_sum / $rounds"|bc)
+fi
 echo ""
