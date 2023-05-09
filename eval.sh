@@ -115,6 +115,38 @@ EOF
 # --------------------- #
 # use $username         #
 #########################
+function stressCPU() {
+
+    echo -e "${BCYAN}stressing CPUs on $1${NC}" >&2
+
+    log=$( { ssh $username@$1 << EOF
+        nohup stress-ng --cpu 8 -t $expected_max_totaltime 2>&1 & 
+EOF
+    } 2>&1 )
+}
+
+function stressNetwork() {
+
+    echo -e "${BCYAN}stressing network${NC}" >&2
+
+    log=$( { ssh $username@$1 << EOF
+        nohup iperf -s 2>&1 & 
+EOF
+    } 2>&1 )
+    log=$( { ssh $username@$2 << EOF
+        nohup iperf -c $1 -t $expected_max_totaltime 2>&1 & 
+EOF
+    } 2>&1 )
+    echo "$log" >&2
+}
+
+#########################
+# $1: ip addr           #
+# --------------------- #
+# ret: null             #
+# --------------------- #
+# use $username         #
+#########################
 function setupBridgeNetwork() {
 
     log=$( { ssh $username@$1 << EOF
@@ -279,11 +311,19 @@ for (( i = 0; i < $rounds; i++ )); do
 
     if [[ $ab == "on" ]]; then 
         ab_fn="$output_dir/ab_$i.txt"
+        while ! curl -m 10 "http://$guest_ip/" >&2 --output index.html ; do
+            echo -e "${BRED}apache not up yet${NC}" >&2
+    	done
         echo -e "${BCYAN}starting ab${NC}" >&2
-        ab -c 100 -n 100000000000000000 -s 90 -g "$ab_fn" http://10.10.1.5/ >&2 & 
+        /users/fjyang/httpd-2.4.54/support/ab -c 50 -n 60000 -s 10 -g "$ab_fn" http://10.10.1.5/ >&2 & 
         ab_pid=$!
+	sleep 5s
     fi
 
+    #stressNetwork $src_ip $dst_ip
+    #stressCPU $dst_ip
+    #stressCPU $src_ip
+    #sleep 3s
 
     echo -e "${BCYAN}starting the migration${NC}" >&2
     ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "$command_migrate" 2>/dev/null > /dev/null
@@ -291,7 +331,6 @@ for (( i = 0; i < $rounds; i++ )); do
     ncat -w 5 -i 2 $src_ip $src_monitor_port <<< "migrate_start_postcopy" 2> /dev/null > /dev/null
     echo -e "${BCYAN}wait for the migration to complete${NC}" >&2
     sleep "$expected_max_totaltime"
-
 
     echo -e "${BCYAN}fetching migration results${NC}" >&2
     src_fn="$output_dir/src_$i.txt"
@@ -304,18 +343,24 @@ for (( i = 0; i < $rounds; i++ )); do
     result=""
     if [[ $ab == "on" ]]; then
         echo -e "${BCYAN}checking ab validity${NC}" >&2
-        if ! ps -p $ab_pid > /dev/null; then
-            echo -e "${BRED}ab stopped early${NC}" >&2
+        #if ! ps -p $ab_pid > /dev/null; then
+        #    echo -e "${BRED}ab stopped early${NC}" >&2
+        #    result+="Failed"
+        #fi
+        #echo -e "${BCYAN}stopping ab${NC}" >&2
+        #sudo kill -SIGINT "$ab_pid" >&2
+	#sudo kill -SIGINT $(pgrep ab) >&2
+        #sleep 10s
+	if [ ! -f "$ab_fn" ]; then
+            echo -e "${BRED}ab output missing${NC}" >&2
             result+="Failed"
-        fi
-        echo -e "${BCYAN}stopping ab${NC}" >&2
-        sudo kill -SIGINT "$ab_pid" >&2
-        sleep 10s
+	fi 
     fi
 
 
     if [[ $ab == "on" ]]; then 
-        if curl -m 10 "$guest_ip" >&2 ; then
+        #if curl -m 10 "http://$guest_ip/64kb" --output 64kb >&2 ; then
+        if curl -m 10 "http://$guest_ip/" >&2 --output index.html ; then
             echo -e "${BGREEN}dst alive${NC}" >&2
         else
             echo -e "${BRED}dst dead${NC}" >&2
