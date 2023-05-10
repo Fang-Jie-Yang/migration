@@ -315,7 +315,7 @@ for (( i = 0; i < $rounds; i++ )); do
             echo -e "${BRED}apache not up yet${NC}" >&2
     	done
         echo -e "${BCYAN}starting ab${NC}" >&2
-        /users/fjyang/httpd-2.4.54/support/ab -c 50 -n 75000 -s 10 -g "$ab_fn" http://10.10.1.5/ >&2 & 
+        /users/fjyang/httpd-2.4.54/support/ab -c 100 -n 1000000 -s 20 -g "$ab_fn" http://10.10.1.5/ >&2 & 
         ab_pid=$!
 	sleep 3s
     fi
@@ -343,17 +343,15 @@ for (( i = 0; i < $rounds; i++ )); do
 
     result=""
     if [[ $ab == "on" ]]; then
-        echo -e "${BCYAN}wait for ab to complete${NC}" >&2
-	sleep 5s
         echo -e "${BCYAN}checking ab validity${NC}" >&2
-        #if ! ps -p $ab_pid > /dev/null; then
-        #    echo -e "${BRED}ab stopped early${NC}" >&2
-        #    result+="Failed"
-        #fi
-        #echo -e "${BCYAN}stopping ab${NC}" >&2
-        #sudo kill -SIGINT "$ab_pid" >&2
+        if ! ps -p $ab_pid > /dev/null; then
+            echo -e "${BRED}ab stopped early${NC}" >&2
+            result+="Failed"
+        fi
+        echo -e "${BCYAN}stopping ab${NC}" >&2
+        sudo kill -SIGINT "$ab_pid" >&2
 	#sudo kill -SIGINT $(pgrep ab) >&2
-        #sleep 10s
+        sleep 5s
 	if [ ! -f "$ab_fn" ]; then
             echo -e "${BRED}ab output missing${NC}" >&2
             result+="Failed"
