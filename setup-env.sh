@@ -121,3 +121,24 @@ yes | sudo apt update
 yes | sudo apt install apache2-utils
 yes | sudo apt install dos2unix
 yes | sudo apt install ncat
+yes | sudo apt install python3-pip
+pip3 install matplotlib
+pip3 install pandas
+
+git clone git@github.com:ntu-ssl/some-tutorials.git
+
+wget https://dlcdn.apache.org//apr/apr-1.7.4.tar.gz
+tar xvf apr-1.7.4.tar.gz
+cd apr-1.7.4
+./configure; sudo make && sudo make install
+
+wget https://dlcdn.apache.org//apr/apr-util-1.6.3.tar.gz
+tar xvf apr-util-1.6.3.tar.gz
+cd ../apr-util-1.6.3
+./configure --with-apr=/usr/local/apr; sudo make && sudo make install
+
+wget https://archive.apache.org/dist/httpd/httpd-2.4.54.tar.gz
+tar xvf httpd-2.4.54.tar.gz
+cd ../httpd-2.4.54
+cp ~/some-tutorials/files/migration/ab.c support
+./configure --with-apr=/usr/local/apr; sudo make && sudo make install
