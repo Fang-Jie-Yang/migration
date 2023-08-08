@@ -125,20 +125,25 @@ yes | sudo apt install python3-pip
 pip3 install matplotlib
 pip3 install pandas
 
+
+cd ~
 git clone git@github.com:ntu-ssl/some-tutorials.git
 
+cd ~
 wget https://dlcdn.apache.org//apr/apr-1.7.4.tar.gz
 tar xvf apr-1.7.4.tar.gz
 cd apr-1.7.4
 ./configure; sudo make && sudo make install
 
+cd ~
 wget https://dlcdn.apache.org//apr/apr-util-1.6.3.tar.gz
 tar xvf apr-util-1.6.3.tar.gz
-cd ../apr-util-1.6.3
+cd apr-util-1.6.3
 ./configure --with-apr=/usr/local/apr; sudo make && sudo make install
 
+cd ~
 wget https://archive.apache.org/dist/httpd/httpd-2.4.54.tar.gz
 tar xvf httpd-2.4.54.tar.gz
-cd ../httpd-2.4.54
+cd httpd-2.4.54
 cp ~/some-tutorials/files/migration/ab.c support
 ./configure --with-apr=/usr/local/apr; sudo make && sudo make install
