@@ -53,4 +53,17 @@ function post_migration() {
 	return 0
 }
 
+MIGRATION_TIMEOUT=60
+
+OUTPUT_DIR="./"
+
+DATA_FIELDS=(
+    "downtime"
+    "total time"
+    "throughput"
+    "setup"
+    "transferred ram"
+)
+
+ROUNDS=2
 
