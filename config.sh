@@ -15,7 +15,7 @@ QEMU_CMD="$QEMU_PATH/aarch64-softmmu/qemu-system-aarch64 \
     -M virt \
     -cpu host \
     -smp 4 \
-    -m 1024 \
+    -m 256 \
     -kernel $VM_KERNEL \
     -netdev tap,id=net1,helper=$QEMU_PATH/qemu-bridge-helper,vhost=on \
     -device virtio-net-pci,netdev=net1,mac=de:ad:be:ef:f6:5f \
@@ -37,8 +37,20 @@ MIGRATION_PROPERTIES=(
     "migrate_set_parameter max-bandwidth 102400"
     "migrate_set_parameter multifd-channels 4"
     "migrate_set_parameter max-postcopy-bandwidth 107374182400"
-    "migrate_set_capability multifd on"
-    "migrate_set_capability postcopy-ram off"
 )
+    #"migrate_set_capability multifd on"
+    #"migrate_set_capability postcopy-ram off"
+
+function benchmark_setup() {
+	return 0	
+}
+
+function benchmark_clean_up() {
+	return 0
+}
+
+function post_migration() {
+	return 0
+}
 
 

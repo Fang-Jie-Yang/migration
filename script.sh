@@ -71,8 +71,10 @@ function check_guest_status() {
 }
 
 # qemu_monitor_send(ip, port, cmd)
+# * We only allow idle timeout
 function qemu_monitor_send() {
-    if ! echo "$3" | ncat -w 1 $1 $2; then
+    { err=$(echo "$3" | ncat -w 2 -i 1 $1 $2 2>&1 >&3 3>&-); } 3>&1
+    if [[ "$err" != *"Ncat: Idle timeout expired"* ]]; then
         return $RETRY
     fi
     return 0
@@ -86,6 +88,33 @@ function start_migration() {
     done
     cmd="migrate -d tcp:$DST_IP:$MIGRATION_PORT"
     if ! qemu_monitor_send $SRC_IP $MONITOR_PORT "$cmd"; then
+        return $RETRY
+    fi
+    return 0
+}
+
+# * We don't apply error check here,
+# * let the function that use the info to detect failure
+function qemu_migration_info_fetch() {
+    echo "info migrate" | \
+    ncat -w 1 -i 1 $SRC_IP $MONITOR_PORT 2> /dev/null | \
+    strings | \
+    tail -n +14 | \
+    head -n -1
+}
+
+# qemu_migration_info_get_field(field_name)
+function qemu_migration_info_get_field() {
+    val=$(qemu_migration_info_fetch | grep "$1:")
+    val=${val#$1: }
+    val=${val%\ *}
+    echo "$val"
+}
+
+function migration_complete() {
+    status=$(qemu_migration_info_get_field "Migration status")
+    echo "$status"
+    if [[ $status != "completed" ]]; then
         return $RETRY
     fi
     return 0
@@ -118,32 +147,45 @@ function do_migration_eval() {
         err_msg "Failed to setup environment"
         return $ret;
     fi
-
     if ! boot_vm "$SRC_IP" "$SRC_QEMU_CMD"; then
         ret=$?
         err_msg "Failed to boot at src"
         return $ret
     fi
-
     if ! boot_vm "$DST_IP" "$DST_QEMU_CMD"; then
         ret=$?
         err_msg "Failed to boot at dst"
         return $ret
     fi
-
     sleep 10s
-
     if ! check_guest_status; then
         ret=$?
         err_msg "VM status unknown"
         return $ret
     fi
-        
+    if ! benchmark_setup; then
+        ret=$?
+        err_msg "Failed to setup benchmark"
+        return $ret
+    fi
     if ! start_migration; then
         ret=$?
         err_msg "Failed to start migration"
         return $ret
     fi
+    if ! post_migration; then
+        ret=$?
+        err_msg "Failed to execute post migration"
+        return $ret
+    fi
+
+    sleep 5s
+    while ! migration_complete; do
+        sleep 10s
+    done
+
+    qemu_migration_info_fetch
+
 }
 
 
