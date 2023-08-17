@@ -278,7 +278,7 @@ function result() {
 
 
 # * Main *
-source config.sh
+source $1
 mkdir $OUTPUT_DIR
 
 i=0
