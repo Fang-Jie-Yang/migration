@@ -13,10 +13,10 @@ DST_IP="10.10.1.2"
 GUEST_IP="10.10.1.5"
 
 QEMU_PATH="/mydata/qemu"
-VM_KERNEL="/mydata/some-tutorials/files/Image.sekvm"
+VM_KERNEL="/mydata/some-tutorials/files/sekvm/Image.sekvm.guest"
+#VM_KERNEL="/mydata/some-tutorials/files/Image.sekvm"
 VM_DISK_IMAGE="/proj/ntucsie-PG0/fjyang/cloud-hack-ab-bak.img"
 NFS_PATH="/proj/ntucsie-PG0/fjyang/cloud-hack-ab.img"
-#VM_KERNEL="/mydata/some-tutorials/files/sekvm/Image.sekvm.guest"
 MONITOR_PORT="1234"
 MIGRATION_PORT="8888"
 QEMU_CMD="$QEMU_PATH/aarch64-softmmu/qemu-system-aarch64 \
