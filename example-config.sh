@@ -84,7 +84,7 @@ function benchmark_setup() {
     $AB_BIN -c 100 -n 1000000 -s 30 -g "$OUTPUT_DIR/ab$1" http://$GUEST_IP/ >&2 & 
     AB_PID=$!
 
-	return 0	
+    return 0	
 }
 
 # Will be called just after migration started
@@ -99,7 +99,7 @@ function post_migration() {
     #    return $RETRY
     #fi
 
-	return 0
+    return 0
 }
 
 # Will be called after migration completed,
@@ -135,6 +135,6 @@ function benchmark_clean_up() {
     log_msg "ab downtime: $dt ms"
     echo "ab downtime: $dt ms" >> $OUTPUT_DIR/$1
 
-	return 0
+    return 0
 }
 
