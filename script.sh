@@ -1,6 +1,5 @@
 #! /bin/bash
 
-
 NEED_REBOOT=1
 RETRY=2
 ABORT=3
@@ -63,7 +62,7 @@ EOF
 
 function check_guest_status() {
     log_msg "Checking vm's status"
-    if ! ping -c 3 "$GUEST_IP" >&2 ; then
+    if ! ping -c 1 "$GUEST_IP" >&2 ; then
         return $RETRY
     fi
     return 0
@@ -124,18 +123,13 @@ function migration_is_completed() {
 
 
 # qemu_migration_info_save(file_path)
-# * We check data validity here
+# * We still don't check data validity here
 function qemu_migration_info_save() {
     log_msg "Saving migration outcome"
     info=$(qemu_migration_info_fetch)
     for field in "${DATA_FIELDS[@]}"; do
         val=$(qemu_migration_info_get_field "$info" "$field")
-        if [[ -z "$val" ]]; then
-            err_msg "No $field value"
-            return $RETRY
-        else
-            log_msg "$field: $val"
-        fi
+        log_msg "$field: $val"
     done
     echo "$info" > $1
     dos2unix $1
@@ -164,9 +158,10 @@ function clean_up() {
 
 function do_migration_eval() {
 
-    if ! setup_vm_env ; then
+    setup_vm_env; ret=$?
+    if [[ $ret != 0 ]] ; then
         err_msg "Failed to setup environment"
-        return $RETRY;
+        return $ret
     fi
     boot_vm "$SRC_IP" "$SRC_QEMU_CMD"; ret=$?
     if [[ $ret != 0 ]] ; then
@@ -182,18 +177,19 @@ function do_migration_eval() {
     if ! check_guest_status; then
         # second chance
         if ! check_guest_status; then
-            err_msg "VM status unknown"
+            err_msg "VM status broken"
             return $RETRY
         fi
     fi
-    benchmark_setup; ret=$?
+    benchmark_setup $1; ret=$?
     if [[ $ret != 0 ]] ; then
         err_msg "Failed to setup benchmark"
         return $ret
     fi
-    if ! start_migration; then
+    start_migration; ret=$?
+    if [[ $ret != 0 ]] ; then
         err_msg "Failed to start migration"
-        return $RETRY
+        return $ret
     fi
     post_migration; ret=$?
     if [[ $ret != 0 ]] ; then
@@ -209,14 +205,22 @@ function do_migration_eval() {
         sleep 10s
         (( elapsed += 10 ))
     done
-    if ! qemu_migration_info_save "$OUTPUT_DIR/$1"; then
+    qemu_migration_info_save "$OUTPUT_DIR/$1"; ret=$?
+    if [[ $ret != 0 ]] ; then
         err_msg "Failed to save data"
-        return $RETRY
+        return $ret
     fi
-    benchmark_clean_up; ret=$?
+    benchmark_clean_up $1; ret=$?
     if [[ $ret != 0 ]] ; then
         err_msg "Failed to clean up benchmark"
         return $ret
+    fi
+    if ! check_guest_status; then
+        # second chance
+        if ! check_guest_status; then
+            err_msg "VM status broken after migration"
+            return $RETRY
+        fi
     fi
 }
 
@@ -234,22 +238,62 @@ EOF
     fi
 }
 
+# wait_for(ip)
+function wait_for() {
+    while ! ping -c 1 $1 >&2; do
+        err_msg "$1 not up yet"
+        sleep 30s
+    done
+    return 0
+}
+
+function result() {
+    declare -A values
+    for field in "${DATA_FIELDS[@]}"; do
+        values["$field"]=0
+    done
+    for (( n = 0; n < $ROUNDS; n++ )); do
+        file="$OUTPUT_DIR/$n"
+        if ! [[ -e "$file" ]]; then
+            err_msg "$file does not exist!"
+            return $ABORT
+        fi
+        info=$(cat "$file")
+        for field in "${DATA_FIELDS[@]}"; do
+            val=$(qemu_migration_info_get_field "$info" "$field")
+            if [[ -z "$val" ]]; then
+                err_msg "$file has no $field value"
+                return $ABORT
+            else
+                values["$field"]=$(echo "$val" + ${values["$field"]}|bc)
+            fi
+        done
+    done
+    for field in "${DATA_FIELDS[@]}"; do
+        avg=$(echo "scale=4; ${values[$field]} / $ROUNDS"|bc)
+        echo -n "$avg "
+    done
+    echo ""
+}
+
 
 source config.sh
 i=0
-while [[ -e "$OUTPUT_DIR/$i" ]]; do
-    (( i += 1 ))
-done
-
 while [[ $i -lt $ROUNDS ]]; do
-    log_msg "now: $i"
+
+    if [[ "$USE_PREV_FILE" == "true" ]] && [[ -e "$OUTPUT_DIR/$i" ]]; then
+        log_msg "Skipping round $i"
+        (( i += 1 ))
+        continue
+    fi
+    log_msg "Evaluation round: $i"
     do_migration_eval $i
     case $? in
         $NEED_REBOOT)
             reboot_m400 $SRC_IP
             reboot_m400 $DST_IP
-            # TODO: busy waiting
-            sleep 8m
+            wait_for $SRC_IP
+            wait_for $DST_IP
             ;;
         $ABORT)
             exit 1
@@ -266,4 +310,6 @@ while [[ $i -lt $ROUNDS ]]; do
     esac
     sleep 10s
 done
+
+result >> $OUTPUT_FILE
 
