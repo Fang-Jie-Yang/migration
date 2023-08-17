@@ -2,11 +2,11 @@
 ROUNDS=2
 
 # directory to store output file for each round
-OUTPUT_DIR="./"
+OUTPUT_DIR="./eval_output"
 # skip round when output file exists in OUTPUT_DIR
 USE_PREV_FILE="true"
 # file for final statistic result of all rounds
-OUTPUT_FILE="result.txt"
+OUTPUT_FILE="eval_result.txt"
 
 SRC_IP="10.10.1.1"
 DST_IP="10.10.1.2"
@@ -65,37 +65,61 @@ ABORT=3
 # Will be called before migration started,
 # with current round as argument ($1)
 function benchmark_setup() {
-    AB_BIN="/users/fjyang/httpd-2.4.54/support/ab"
+
+    log_msg "Setting up benchmark"
+    #
+    # Exmaple usage: Apache benchmark
+    #
+    AB_BIN="/users/$(whoami)/httpd-2.4.54/support/ab"
     AB_PID=-1
+    local cnt=0
     while ! curl -m 10 "http://$GUEST_IP/" > /dev/null 2>&1; do
         log_msg "waiting for guest's apache server"
+        (( cnt += 1))
+        if [[ cnt -ge 6 ]]; then
+            err_msg "Guest's apache server broken"
+            return $RETRY
+        fi
     done
     $AB_BIN -c 100 -n 1000000 -s 30 -g "$OUTPUT_DIR/ab$1" http://$GUEST_IP/ >&2 & 
     AB_PID=$!
+
 	return 0	
 }
 
-# Will be called just after migration started,
+# Will be called just after migration started
 function post_migration() {
-    #sleep 12s
+
+    log_msg "post_migration()"
+    #
+    # Example usage: postcopy 
+    #
+    #sleep 5s
     #if ! qemu_monitor_send $SRC_IP $MONITOR_PORT "migrate_start_postcopy"; then
     #    return $RETRY
     #fi
+
 	return 0
 }
 
 # Will be called after migration completed,
 # with current round as argument ($1)
 function benchmark_clean_up() {
+
+    log_msg "Cleaning up benchmark"
+
+    #
+    # Exmaple usage: Apache benchmark
+    #
+    AB_PYTHON_SCRIPT="./plot.py"
     log_msg "Checking ab validity"
     if ! ps -p $AB_PID > /dev/null; then
         err_msg "Ab stopped early"
         return $RETRY
     fi
     log_msg "Stopping ab"
-    sudo kill -SIGINT "$AB_PID"
-    sleep 5s
-	if [ ! -f "$OUTPUT_DIR/ab$1" ]; then
+    sudo kill -SIGINT "$AB_PID"; sleep 5s
+	if [[ ! -f "$OUTPUT_DIR/ab$1" ]]; then
         err_msg "Ab output missing"
         return $RETRY
 	fi 
@@ -103,8 +127,14 @@ function benchmark_clean_up() {
         err_msg "Guest's apache server downed after migration"
         return $RETRY
     fi
-    dt=$(python3 ~/some-tutorials/files/migration/plot.py $OUTPUT_DIR/ab$1 | awk '{print $2}')
-    echo "ab downtime: $dt" | tee -a $OUTPUT_DIR/$1
+    dt=$(python3 $AB_PYTHON_SCRIPT $OUTPUT_DIR/ab$1 | awk '{print $2}')
+    if [[ -z $dt ]]; then
+        err_msg "Ab python script failed"
+        return $RETRY
+    fi
+    log_msg "ab downtime: $dt ms"
+    echo "ab downtime: $dt ms" >> $OUTPUT_DIR/$1
+
 	return 0
 }
 
