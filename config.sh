@@ -111,7 +111,7 @@ function benchmark_clean_up() {
     #
     # Exmaple usage: Apache benchmark
     #
-    AB_PYTHON_SCRIPT="./plot.py"
+    AB_PYTHON_SCRIPT="./ab-plot.py"
     log_msg "Checking ab validity"
     if ! ps -p $AB_PID > /dev/null; then
         err_msg "Ab stopped early"
@@ -127,7 +127,7 @@ function benchmark_clean_up() {
         err_msg "Guest's apache server downed after migration"
         return $RETRY
     fi
-    dt=$(python3 $AB_PYTHON_SCRIPT $OUTPUT_DIR/ab$1 | awk '{print $2}')
+    dt=$(echo "$OUTPUT_DIR/$1.png" | python3 $AB_PYTHON_SCRIPT $OUTPUT_DIR/ab$1 | awk '{print $2}')
     if [[ -z $dt ]]; then
         err_msg "Ab python script failed"
         return $RETRY

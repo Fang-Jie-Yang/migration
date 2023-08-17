@@ -1,12 +1,49 @@
-#! /bin/bash
+#!/bin/bash
 
-sum=0
-rounds=10
-
-for ((i = 0; i < $rounds; i++)); do
-	temp=$(cat "$i.txt" | awk '$1 == "compression" && $2 == "rate:" {print $3}')
-    sum=$(echo "$temp + $sum"|bc)
+Fields=()
+declare -A Values
+while :
+do
+    case "$1" in
+        -f | --field)
+            Fields+=("$2")
+            Values["$2"]=0
+            shift 2
+            ;;
+        --help | -* | --*)
+            echo "Usage: $(basename $0)"
+            echo "       [(-f|--field) field_name] * N"
+            echo "       file_path"
+            exit 1
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            break
+            ;;
+    esac
 done
 
-sum=$(echo "scale=4; $sum / $rounds"|bc)
-echo "avg: $sum"
+cnt=0
+while :
+do
+    file_name="$1"
+    if [[ -n "$file_name" ]]; then
+        for field in "${Fields[@]}"; do
+            val=$(./read.sh --field "$field" "$file_name")
+            Values["$field"]=$(echo "$val" + ${Values["$field"]}|bc)
+        done
+        (( cnt += 1 ))
+        shift
+    else
+        break
+    fi
+done
+
+for field in "${Fields[@]}"; do
+    avg=$(echo "scale=4; ${Values[$field]} / $cnt"|bc)
+    echo -n "$avg "
+done
+echo ""
