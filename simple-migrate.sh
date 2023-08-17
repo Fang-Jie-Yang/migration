@@ -1,6 +1,12 @@
 #! /bin/bash
 
 
+
+##################################
+# script for migrating VM only   #
+# use --help for more infomation #
+##################################
+
 src_ip="10.10.1.1"
 src_port="1234"
 dst_ip="10.10.1.2"
