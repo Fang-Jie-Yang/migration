@@ -54,7 +54,7 @@ EOF
     fi
     local err="qemu-system-aarch64:"
     if echo "$ret" | grep "$err"; then 
-        err_msg "$err"
+        err_msg $(echo "$ret" | grep "$err")
         return $ABORT
     fi
     return 0
