@@ -69,6 +69,9 @@ function start_migration() {
         if ! qemu_monitor_send $SRC_IP $MONITOR_PORT "$cmd"; then
             return $RETRY
         fi
+        if ! qemu_monitor_send $DST_IP $MONITOR_PORT "$cmd"; then
+            return $RETRY
+        fi
     done
     local cmd="migrate -d tcp:$DST_IP:$MIGRATION_PORT"
     if ! qemu_monitor_send $SRC_IP $MONITOR_PORT "$cmd"; then
