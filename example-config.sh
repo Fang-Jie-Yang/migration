@@ -57,10 +57,30 @@ DATA_FIELDS=(
     "ab downtime"
 )
 
-# return values for callback functions
+# return values for callback functions,
 NEED_REBOOT=1
 RETRY=2
 ABORT=3
+
+# Will be called at the start of each round
+function setup_vm_env() {
+    log_msg "Setting up environment"
+    if ! sudo cp $VM_DISK_IMAGE $NFS_PATH; then
+        err_msg "Cannot setup disk image"
+        return $RETRY
+    fi 
+    return 0
+}
+
+# Will be called after the guest booted,
+# and after the migration
+function check_guest_status() {
+    log_msg "Checking vm's status"
+    if ! ping -c 1 "$GUEST_IP" >&2 ; then
+        return $RETRY
+    fi
+    return 0
+}
 
 # Will be called before migration started,
 # with current round as argument ($1)

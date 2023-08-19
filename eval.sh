@@ -17,15 +17,6 @@ function err_msg() {
     echo -e "${BRED}$1${NC}" >&2
 }
 
-function setup_vm_env() {
-    log_msg "Setting up environment"
-    if ! sudo cp $VM_DISK_IMAGE $NFS_PATH; then
-        err_msg "Cannot setup disk image"
-        return $RETRY
-    fi 
-    return 0
-}
-
 function boot_vm() {
     log_msg "Booting VM on $1"
 
@@ -60,13 +51,6 @@ EOF
     return 0
 }
 
-function check_guest_status() {
-    log_msg "Checking vm's status"
-    if ! ping -c 1 "$GUEST_IP" >&2 ; then
-        return $RETRY
-    fi
-    return 0
-}
 
 # qemu_monitor_send(ip, port, cmd)
 # * We only allow idle timeout error
