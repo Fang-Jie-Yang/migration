@@ -228,7 +228,7 @@ EOF
 
 # wait_for(ip)
 function wait_for() {
-    while ! ping -c 1 $1 >&2; do
+    while ! ssh -q $(whoami)@$1 exit; do
         err_msg "$1 not up yet"
         sleep 30s
     done
@@ -290,6 +290,7 @@ while [[ $i -lt $ROUNDS ]]; do
             reboot_m400 $DST_IP
             wait_for $SRC_IP
             wait_for $DST_IP
+	    sleep 20s
             ;;
         $ABORT)
             exit 1
