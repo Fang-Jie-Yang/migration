@@ -11,7 +11,7 @@ src_ip="10.10.1.1"
 src_port="1234"
 dst_ip="10.10.1.2"
 dst_port="1235"
-migarte_port="8888"
+migrate_port="8888"
 declare -A ParamSettings
 declare -A CapSettings
 BCYAN='\033[1;36m'
