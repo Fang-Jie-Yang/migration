@@ -15,6 +15,7 @@ GUEST_IP="10.10.1.1"
 QEMU_PATH="/mydata/qemu"
 NFS_PATH="/proj/ntucsie-PG0/fjyang/cloud-hack-ab.img"
 INITRD="/mydata/some-tutorials/files/ramfs/core-image-minimal-qemuarm.cpio.gz"
+VM_KERNEL="/mydata/some-tutorials/files/Image"
 MONITOR_PORT="1234"
 MIGRATION_PORT="8888"
 QEMU_CMD="$QEMU_PATH/aarch64-softmmu/qemu-system-aarch64 \
