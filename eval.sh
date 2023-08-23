@@ -26,6 +26,7 @@ EOF
     } 2>&1 > /dev/null)
 
     #err_msg "$ret"
+    #TODO: check ssh failure
 
     # We have to check for error manually to decide return value
     local err="Failed to retrieve host CPU features"
@@ -128,6 +129,7 @@ function force_clean_up() {
     log_msg "Cleaning up w/ pkill"
     local cmd="sudo pkill -9 qemu"
     echo "$cmd" | ssh -q $(whoami)@$1 >/dev/null
+    #TODO: ssh timeout
     if [[ $? -eq 255 ]]; then
         err_msg "Failed to force clean up"
         exit 1
@@ -210,6 +212,7 @@ function do_migration_eval() {
             return $RETRY
         fi
     fi
+    #TODO: add parameters/capabilities check
 }
 
 # reboot_m400(ip)
@@ -299,8 +302,9 @@ while [[ $i -lt $ROUNDS ]]; do
             clean_up $SRC_IP
             clean_up $DST_IP
             rm $OUTPUT_DIR/$i
+	    #TODO: consecutive failure => reboot
             ;;
-        *)
+        0)
             clean_up $SRC_IP
             clean_up $DST_IP
             (( i += 1 ))
