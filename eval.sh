@@ -68,15 +68,15 @@ function qemu_monitor_send() {
 function start_migration() {
     log_msg "Starting migration"
     for cmd in "${MIGRATION_PROPERTIES[@]}"; do
-        if ! qemu_monitor_send $SRC_IP $MONITOR_PORT "$cmd"; then
+        if ! qemu_monitor_send $SRC_IP $SRC_MONITOR_PORT "$cmd"; then
             return $RETRY
         fi
-        if ! qemu_monitor_send $DST_IP $MONITOR_PORT "$cmd"; then
+        if ! qemu_monitor_send $DST_IP $DST_MONITOR_PORT "$cmd"; then
             return $RETRY
         fi
     done
     local cmd="migrate -d tcp:$DST_IP:$MIGRATION_PORT"
-    if ! qemu_monitor_send $SRC_IP $MONITOR_PORT "$cmd"; then
+    if ! qemu_monitor_send $SRC_IP $SRC_MONITOR_PORT "$cmd"; then
         return $RETRY
     fi
     return 0
@@ -86,7 +86,7 @@ function start_migration() {
 # * let the function that use the info to detect failure
 function qemu_migration_info_fetch() {
     echo "info migrate" | \
-    ncat -w 1 -i 1 $SRC_IP $MONITOR_PORT 2> /dev/null | \
+    ncat -w 1 -i 1 $SRC_IP $SRC_MONITOR_PORT 2> /dev/null | \
     strings | \
     tail -n +14 | \
     head -n -1
@@ -139,7 +139,7 @@ function force_clean_up() {
 
 function clean_up() {
     log_msg "Cleaning up"
-    if ! qemu_monitor_send $1 $MONITOR_PORT "quit"; then
+    if ! qemu_monitor_send $1 $2 "quit"; then
         err_msg "Failed to clean up"
         force_clean_up $1
     fi
@@ -302,14 +302,14 @@ while [[ $i -lt $ROUNDS ]]; do
             exit 1
             ;;
         $RETRY)
-            clean_up $SRC_IP
-            clean_up $DST_IP
+            clean_up $SRC_IP $SRC_MONITOR_PORT
+            clean_up $DST_IP $DST_MONITOR_PORT
             rm $OUTPUT_DIR/$i
 	    #TODO: consecutive failure => reboot
             ;;
         0)
-            clean_up $SRC_IP
-            clean_up $DST_IP
+            clean_up $SRC_IP $SRC_MONITOR_PORT
+            clean_up $DST_IP $DST_MONITOR_PORT
             (( i += 1 ))
             ;;
     esac

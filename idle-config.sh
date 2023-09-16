@@ -17,7 +17,8 @@ QEMU_PATH="/mydata/qemu"
 VM_KERNEL="/mydata/some-tutorials/files/Image"
 VM_DISK_IMAGE="/proj/ntucsie-PG0/fjyang/cloud-hack-ab-bak.img"
 NFS_PATH="/proj/ntucsie-PG0/fjyang/cloud-hack-ab.img"
-MONITOR_PORT="1234"
+SRC_MONITOR_PORT="1234"
+DST_MONITOR_PORT="1235"
 MIGRATION_PORT="8888"
 QEMU_CMD="$QEMU_PATH/aarch64-softmmu/qemu-system-aarch64 \
     -enable-kvm \
@@ -34,9 +35,9 @@ QEMU_CMD="$QEMU_PATH/aarch64-softmmu/qemu-system-aarch64 \
     -display none \
     -daemonize"
 SRC_QEMU_CMD="$QEMU_CMD \
-    -monitor telnet:$SRC_IP:$MONITOR_PORT,server,nowait"
+    -monitor telnet:$SRC_IP:$SRC_MONITOR_PORT,server,nowait"
 DST_QEMU_CMD="$QEMU_CMD \
-    -monitor telnet:$DST_IP:$MONITOR_PORT,server,nowait \
+    -monitor telnet:$DST_IP:$DST_MONITOR_PORT,server,nowait \
     -incoming tcp:0:$MIGRATION_PORT"
 MIGRATION_PROPERTIES=(
     "migrate_set_parameter downtime-limit 1"
@@ -99,7 +100,7 @@ function post_migration() {
     # Example usage: postcopy 
     #
     #sleep 5s
-    #if ! qemu_monitor_send $SRC_IP $MONITOR_PORT "migrate_start_postcopy"; then
+    #if ! qemu_monitor_send $SRC_IP $SRC_MONITOR_PORT "migrate_start_postcopy"; then
     #    return $RETRY
     #fi
 
