@@ -269,7 +269,10 @@ function result() {
 
 
 # * Main *
-source $1
+if ! source $1; then
+	err_msg "Cannot source config file $1"
+	exit 1
+fi
 mkdir $OUTPUT_DIR
 
 i=0
