@@ -92,6 +92,16 @@ function benchmark_setup() {
     return 0	
 }
 
+# Will be called just before migration started
+function pre_migration() {
+
+    log_msg "pre_migration()"
+    #
+    # Example usage: SEV setup
+    #
+    return 0
+}
+
 # Will be called just after migration started
 function post_migration() {
 
