@@ -38,7 +38,7 @@ SRC_QEMU_CMD="$QEMU_CMD \
     -monitor telnet:$SRC_IP:$SRC_MONITOR_PORT,server,nowait"
 DST_QEMU_CMD="$QEMU_CMD \
     -monitor telnet:$DST_IP:$DST_MONITOR_PORT,server,nowait \
-    -incoming tcp:0:$MIGRATION_PORT"
+    -incoming defer"
 MIGRATION_PROPERTIES=(
     "migrate_set_parameter downtime-limit 3000"
     "migrate_set_parameter max-bandwidth 102400"

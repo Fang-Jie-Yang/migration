@@ -67,6 +67,7 @@ function qemu_monitor_send() {
 
 function start_migration() {
     log_msg "Starting migration"
+    # Set up migration capabilities/parameters on src and dst QEMU
     for cmd in "${MIGRATION_PROPERTIES[@]}"; do
         if ! qemu_monitor_send $SRC_IP $SRC_MONITOR_PORT "$cmd"; then
             return $RETRY
@@ -75,6 +76,12 @@ function start_migration() {
             return $RETRY
         fi
     done
+    # Tell dst QEMU to listen on MIGRATION_PORT
+    local cmd="migrate_incoming tcp:$DST_IP:$MIGRATION_PORT"
+    if ! qemu_monitor_send $DST_IP $DST_MONITOR_PORT "$cmd"; then
+        return $RETRY
+    fi
+    # Tell src QEMU to start the migration
     local cmd="migrate -d tcp:$DST_IP:$MIGRATION_PORT"
     if ! qemu_monitor_send $SRC_IP $SRC_MONITOR_PORT "$cmd"; then
         return $RETRY
@@ -176,6 +183,11 @@ function do_migration_eval() {
         err_msg "Failed to setup benchmark"
         return $ret
     fi
+    pre_migration; ret=$?
+    if [[ $ret != 0 ]] ; then
+        err_msg "pre_migration() failed"
+        return $ret
+    fi
     start_migration; ret=$?
     if [[ $ret != 0 ]] ; then
         err_msg "Failed to start migration"
@@ -270,8 +282,8 @@ function result() {
 
 # * Main *
 if ! source $1; then
-	err_msg "Cannot source config file $1"
-	exit 1
+    err_msg "Cannot source config file $1"
+    exit 1
 fi
 mkdir $OUTPUT_DIR
 

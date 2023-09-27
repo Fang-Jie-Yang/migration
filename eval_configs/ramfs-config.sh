@@ -10,13 +10,12 @@ OUTPUT_FILE="eval_result.txt"
 
 SRC_IP="10.10.1.1"
 DST_IP="10.10.1.2"
-GUEST_IP="10.10.1.5"
+GUEST_IP="10.10.1.1"
 
 QEMU_PATH="/mydata/qemu"
-#VM_KERNEL="/mydata/some-tutorials/files/sekvm/Image.sekvm.guest"
-VM_KERNEL="/mydata/some-tutorials/files/Image"
-VM_DISK_IMAGE="/proj/ntucsie-PG0/fjyang/cloud-hack-ab-bak.img"
 NFS_PATH="/proj/ntucsie-PG0/fjyang/cloud-hack-ab.img"
+INITRD="/mydata/some-tutorials/files/ramfs/core-image-minimal-qemuarm.cpio.gz"
+VM_KERNEL="/mydata/some-tutorials/files/Image"
 SRC_MONITOR_PORT="1234"
 DST_MONITOR_PORT="1235"
 MIGRATION_PORT="8888"
@@ -25,24 +24,24 @@ QEMU_CMD="$QEMU_PATH/aarch64-softmmu/qemu-system-aarch64 \
     -M virt \
     -cpu host \
     -smp 4 \
-    -m 1024 \
+    -m 256 \
     -kernel $VM_KERNEL \
-    -netdev tap,id=net1,helper=$QEMU_PATH/qemu-bridge-helper,vhost=on \
-    -device virtio-net-pci,netdev=net1,mac=de:ad:be:ef:f6:5f \
-    -drive if=none,file=$NFS_PATH,id=vda,cache=none,format=raw \
-    -device virtio-blk-pci,drive=vda \
-    -append 'console=ttyAMA0 root=/dev/vda rw earlycon=pl011,0x09000000' \
+    -initrd $INITRD \
+    -net none \
+    -append 'console=hvc0 earlycon=pl011,0x09000000' \
     -display none \
     -daemonize"
+
 SRC_QEMU_CMD="$QEMU_CMD \
     -monitor telnet:$SRC_IP:$SRC_MONITOR_PORT,server,nowait"
 DST_QEMU_CMD="$QEMU_CMD \
     -monitor telnet:$DST_IP:$DST_MONITOR_PORT,server,nowait \
-    -incoming tcp:0:$MIGRATION_PORT"
+    -incoming defer"
 MIGRATION_PROPERTIES=(
-    "migrate_set_parameter downtime-limit 1"
-    "migrate_set_parameter max-bandwidth 1024000"
-    "migrate_set_parameter multifd-channels 4"
+    #"migrate_set_parameter downtime-limit 3000"
+    "migrate_set_parameter max-bandwidth 102400"
+    "migrate_set_parameter multifd-channels 8"
+    #"migrate_set_parameter max-postcopy-bandwidth 107374182400"
     "migrate_set_capability multifd on"
     #"migrate_set_capability postcopy-ram off"
 )
@@ -56,7 +55,7 @@ DATA_FIELDS=(
     "transferred ram"
 )
 
-# return values for callback functions,
+# return values for callback functions
 NEED_REBOOT=1
 RETRY=2
 ABORT=3
@@ -64,10 +63,6 @@ ABORT=3
 # Will be called at the start of each round
 function setup_vm_env() {
     log_msg "Setting up environment"
-    if ! sudo cp $VM_DISK_IMAGE $NFS_PATH; then
-        err_msg "Cannot setup disk image"
-        return $RETRY
-    fi 
     return 0
 }
 
@@ -75,9 +70,6 @@ function setup_vm_env() {
 # and after the migration
 function check_guest_status() {
     log_msg "Checking vm's status"
-    if ! ping -c 1 "$GUEST_IP" >&2 ; then
-        return $RETRY
-    fi
     return 0
 }
 
@@ -86,9 +78,6 @@ function check_guest_status() {
 function benchmark_setup() {
 
     log_msg "Setting up benchmark"
-    #
-    # Exmaple usage: Apache benchmark
-    #
     return 0	
 }
 
@@ -112,10 +101,6 @@ function post_migration() {
 function benchmark_clean_up() {
 
     log_msg "Cleaning up benchmark"
-
-    #
-    # Exmaple usage: Apache benchmark
-    #
     return 0
 }
 
