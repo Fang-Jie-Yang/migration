@@ -16,7 +16,7 @@ NC='\033[0m'
 # $1: username
 # $2: ip
 function setupGitHubKey() {
-    ssh $1@$2 << EOF
+    ssh -A $1@$2 << EOF
         echo $github_ssh_key >> ~/.ssh/known_hosts
 EOF
 }
@@ -24,7 +24,7 @@ EOF
 # $1: username
 # $2: ip
 function setupDataDir() {
-    ssh $1@$2 << EOF
+    ssh -A $1@$2 << EOF
         sudo chown -R $1 /mydata
 EOF
 }
@@ -33,7 +33,7 @@ EOF
 # $2: ip
 function installQEMU() {
     echo -e "${BCYAN}installing qemu for kvm, could take a while...${NC}"
-    ssh $1@$2 << EOF
+    ssh -A $1@$2 << EOF
         cd /mydata
         git clone --depth 1 --branch $qemu_branch git@github.com:qemu/qemu.git
 	cd qemu
@@ -46,7 +46,7 @@ EOF
 # $2: ip
 function installTutorials() {
     echo -e "${BCYAN}getting scripts up for VMs...${NC}"
-    ssh $1@$2 << EOF
+    ssh -A $1@$2 << EOF
         cd /mydata
         git clone git@github.com:ntu-ssl/some-tutorials.git
 EOF
@@ -56,7 +56,7 @@ EOF
 # $2: ip
 function installKVM() {
     echo -e "${BCYAN}installing kvm, could take a while...${NC}"
-    ssh $1@$2 << EOF
+    ssh -A $1@$2 << EOF
 
         sudo apt install libncurses-dev
 

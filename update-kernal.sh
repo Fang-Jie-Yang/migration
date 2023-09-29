@@ -5,7 +5,7 @@ if [[ $# -ne 2 ]]; then
 	exit
 fi
 
-ssh $1@$2 << EOF
+ssh -A $1@$2 << EOF
 
 	cd /mydata/linux-sekvm
 	make -j8
