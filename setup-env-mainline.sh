@@ -87,13 +87,6 @@ function setup() {
     installQEMU $1 $2
 }
 
-# upload key pair to m400
-echo -e "${BCYAN}uploading key pair to src, dst${NC}"
-scp ~/.ssh/id_rsa "$username@$src_ip:~/.ssh"
-scp ~/.ssh/id_rsa "$username@$dst_ip:~/.ssh"
-scp ~/.ssh/id_rsa.pub "$username@$src_ip:~/.ssh"
-scp ~/.ssh/id_rsa.pub "$username@$dst_ip:~/.ssh"
-
 setup $username $src_ip &
 setup $username $dst_ip &
 
