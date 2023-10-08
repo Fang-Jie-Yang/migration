@@ -1,6 +1,6 @@
 #! /bin/bash
 
-username="fjyang"
+username=$(whoami)
 src_ip="10.10.1.1"
 dst_ip="10.10.1.2"
 guest_branch="pv-v4.18-upcall"

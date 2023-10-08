@@ -1,6 +1,6 @@
 #! /bin/bash
 
-username="fjyang"
+username=$(whoami)
 src_ip="10.10.1.1"
 dst_ip="10.10.1.2"
 qemu_branch="v4.2.1"
