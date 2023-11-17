@@ -139,7 +139,7 @@ function post_migration() {
 function benchmark_clean_up() {
 
     log_msg "Cleaning up benchmark"
-    sleep 40s
+    sleep 100s
 
     #
     # Exmaple usage: Apache benchmark

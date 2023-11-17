@@ -127,7 +127,7 @@ function post_migration() {
     #
     # Example usage: postcopy 
     #
-    sleep 30s
+    return 0
     if ! qemu_monitor_send $SRC_IP $SRC_MONITOR_PORT "migrate_start_postcopy"; then
         return $RETRY
     fi
@@ -140,7 +140,7 @@ function post_migration() {
 function benchmark_clean_up() {
 
     log_msg "Cleaning up benchmark"
-    sleep 40s
+    sleep 100s
 
     #
     # Exmaple usage: Apache benchmark
