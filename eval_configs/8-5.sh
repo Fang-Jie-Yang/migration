@@ -54,7 +54,6 @@ DATA_FIELDS=(
     "throughput"
     "setup"
     "transferred ram"
-    "dirty pages rate avg"
     "postcopy request count"
 )
 
@@ -125,7 +124,7 @@ function post_migration() {
     #
     # Example usage: postcopy 
     #
-    sleep 15s
+    sleep 5s
     if ! qemu_monitor_send $SRC_IP $SRC_MONITOR_PORT "migrate_start_postcopy"; then
         return $RETRY
     fi

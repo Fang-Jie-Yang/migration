@@ -1,12 +1,11 @@
-
 ROUNDS=10
 
 # directory to store output file for each round
-OUTPUT_DIR="./outputs/5-1"
+OUTPUT_DIR="./kvm_ab/5-1"
 # skip round when output file exists in OUTPUT_DIR
 USE_PREV_FILE="true"
 # file for final statistic result of all rounds
-OUTPUT_FILE="./outputs/kvm_result.txt"
+OUTPUT_FILE="./kvm_ab/kvm_result.txt"
 
 SRC_IP="10.10.1.1"
 DST_IP="10.10.1.2"
@@ -39,7 +38,7 @@ DST_QEMU_CMD="$QEMU_CMD \
     -monitor telnet:$DST_IP:$DST_MONITOR_PORT,server,nowait \
     -incoming defer"
 MIGRATION_PROPERTIES=(
-    "migrate_set_parameter downtime-limit 10"
+    "migrate_set_parameter downtime-limit 20"
     "migrate_set_parameter max-bandwidth 102400"
     #"migrate_set_parameter multifd-channels 4"
     #"migrate_set_parameter max-postcopy-bandwidth 107374182400"
@@ -55,7 +54,6 @@ DATA_FIELDS=(
     "setup"
     "transferred ram"
     "ab downtime"
-    "dirty pages rate avg"
 )
 
 # return values for callback functions,
@@ -115,6 +113,7 @@ function pre_migration() {
     #
     # Example usage: SEV setup
     #
+    sleep 5s
     return 0
 }
 
@@ -138,6 +137,7 @@ function post_migration() {
 function benchmark_clean_up() {
 
     log_msg "Cleaning up benchmark"
+    sleep 60s
 
     #
     # Exmaple usage: Apache benchmark

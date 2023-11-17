@@ -54,7 +54,6 @@ DATA_FIELDS=(
     "throughput"
     "setup"
     "transferred ram"
-    "dirty pages rate avg"
 )
 
 # return values for callback functions,
