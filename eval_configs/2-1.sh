@@ -2,11 +2,11 @@
 ROUNDS=10
 
 # directory to store output file for each round
-OUTPUT_DIR="./kvm_ab_stress/6-3"
+OUTPUT_DIR="./outputs/5-1"
 # skip round when output file exists in OUTPUT_DIR
 USE_PREV_FILE="true"
 # file for final statistic result of all rounds
-OUTPUT_FILE="./kvm_ab_stress/kvm_result.txt"
+OUTPUT_FILE="./outputs/kvm_result.txt"
 
 SRC_IP="10.10.1.1"
 DST_IP="10.10.1.2"
@@ -14,8 +14,8 @@ GUEST_IP="10.10.1.5"
 
 QEMU_PATH="/mydata/qemu"
 VM_KERNEL="/mydata/some-tutorials/files/sekvm/Image.sekvm.guest"
-VM_DISK_IMAGE="/proj/ntucsie-PG0/fjyang/cloud-hack-ab-stress-bak.img"
-NFS_PATH="/proj/ntucsie-PG0/fjyang/cloud-hack-ab-stress.img"
+VM_DISK_IMAGE="/proj/ntucsie-PG0/fjyang/cloud-hack-ab-bak.img"
+NFS_PATH="/proj/ntucsie-PG0/fjyang/cloud-hack-ab.img"
 SRC_MONITOR_PORT="1234"
 DST_MONITOR_PORT="1235"
 MIGRATION_PORT="8888"
@@ -39,14 +39,14 @@ DST_QEMU_CMD="$QEMU_CMD \
     -monitor telnet:$DST_IP:$DST_MONITOR_PORT,server,nowait \
     -incoming defer"
 MIGRATION_PROPERTIES=(
-    "migrate_set_parameter downtime-limit 225"
+    "migrate_set_parameter downtime-limit 500"
     "migrate_set_parameter max-bandwidth 102400"
-    "migrate_set_parameter multifd-channels 4"
+    #"migrate_set_parameter multifd-channels 4"
     #"migrate_set_parameter max-postcopy-bandwidth 107374182400"
-    "migrate_set_capability multifd on"
+    #"migrate_set_capability multifd on"
     #"migrate_set_capability postcopy-ram off"
 )
-MIGRATION_TIMEOUT=60
+MIGRATION_TIMEOUT=120
 # Fields to record and count for
 DATA_FIELDS=(
     "downtime"
@@ -55,6 +55,7 @@ DATA_FIELDS=(
     "setup"
     "transferred ram"
     "ab downtime"
+    "dirty pages rate avg"
 )
 
 # return values for callback functions,
@@ -138,7 +139,7 @@ function post_migration() {
 function benchmark_clean_up() {
 
     log_msg "Cleaning up benchmark"
-    sleep 140s
+    sleep 40s
 
     #
     # Exmaple usage: Apache benchmark

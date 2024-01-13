@@ -2,11 +2,11 @@
 ROUNDS=10
 
 # directory to store output file for each round
-OUTPUT_DIR="./outputs/5-5"
+OUTPUT_DIR="./kvm_ab/5-5"
 # skip round when output file exists in OUTPUT_DIR
 USE_PREV_FILE="true"
 # file for final statistic result of all rounds
-OUTPUT_FILE="./outputs/kvm_result.txt"
+OUTPUT_FILE="./kvm_ab/kvm_result.txt"
 
 SRC_IP="10.10.1.1"
 DST_IP="10.10.1.2"
@@ -55,7 +55,6 @@ DATA_FIELDS=(
     "setup"
     "transferred ram"
     "ab downtime"
-    "dirty pages rate avg"
     "postcopy request count"
 )
 
@@ -116,6 +115,7 @@ function pre_migration() {
     #
     # Example usage: SEV setup
     #
+    sleep 5s
     return 0
 }
 
@@ -139,6 +139,7 @@ function post_migration() {
 function benchmark_clean_up() {
 
     log_msg "Cleaning up benchmark"
+    sleep 60s
 
     #
     # Exmaple usage: Apache benchmark

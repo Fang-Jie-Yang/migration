@@ -65,8 +65,7 @@ function qemu_monitor_send() {
     return 0
 }
 
-function start_migration() {
-    log_msg "Starting migration"
+function set_migration_properties() {
     # Set up migration capabilities/parameters on src and dst QEMU
     for cmd in "${MIGRATION_PROPERTIES[@]}"; do
         if ! qemu_monitor_send $SRC_IP $SRC_MONITOR_PORT "$cmd"; then
@@ -76,6 +75,11 @@ function start_migration() {
             return $RETRY
         fi
     done
+    return 0
+}
+
+function start_migration() {
+    log_msg "Starting migration"
     # Tell dst QEMU to listen on MIGRATION_PORT
     local cmd="migrate_incoming tcp:$DST_IP:$MIGRATION_PORT"
     if ! qemu_monitor_send $DST_IP $DST_MONITOR_PORT "$cmd"; then
@@ -177,6 +181,11 @@ function do_migration_eval() {
             err_msg "VM status broken"
             return $RETRY
         fi
+    fi
+    set_migration_properties; ret=$?
+    if [[ $ret != 0 ]] ; then
+        err_msg "Failed to set migration properties"
+        return $ret
     fi
     benchmark_setup $1; ret=$?
     if [[ $ret != 0 ]] ; then
