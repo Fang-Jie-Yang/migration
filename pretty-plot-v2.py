@@ -16,7 +16,7 @@ c = a-b
 print(f'downtime: {c.max()}')
 
 window = 1000
-step = 20
+step = 100
 total = 20000
 
 down_at = a[c.argmax()]
@@ -26,9 +26,25 @@ end = min(down_at + total // 2, log['req_msec'].max())
 timestamp = []
 req = []
 #for t in range(start, end, step):
-for t in range(0, 60000, step):
-    timestamp.append(t+window//2)
-    req.append(log['req_msec'].between(t, t+window, inclusive='left').sum() / (window/1000))
+for t in range(0, 60000):
+    if t % step == 0:
+        timestamp.append(t)
+        req.append(log['req_msec'].between(t - window//2, t+window//2, inclusive='both').sum() / (window/1000))
+    elif log['req_msec'].between(t - 10, t + 10, inclusive='both').sum() == 0:
+        print("hi")
+        timestamp.append(t)
+        req.append(0)
+
+#x, y = [], [] 
+#for t in range(len(timestamp)):
+#    if t % 10 == 0:
+#        x.append(timestamp[t])
+#        y.append(req[t])
+#    elif req[t] == 0:
+#        x.append(timestamp[t])
+#        y.append(req[t])
+    
+
 
 Graph1 = plt.figure(1, figsize=(20, 4))
 req_per_sec= Graph1.add_subplot(111)

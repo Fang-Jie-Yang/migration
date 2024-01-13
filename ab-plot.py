@@ -15,17 +15,19 @@ c = a-b
 
 print(f'downtime: {c.max()}')
 
-frame_size = 200
-frame_shift = 20
+window = 1000
+step = 20
+total = 20000
 
-end_time = log['req_msec'].max()
-
+down_at = a[c.argmax()]
+print(down_at)
+start = max(down_at - total // 2, 0)
+end = min(down_at + total // 2, log['req_msec'].max())
 timestamp = []
 req = []
-
-for t in range(0, 30000, frame_shift):
-    timestamp.append(t+frame_size//2)
-    req.append(log['req_msec'].between(t, t+frame_size, inclusive='left').sum() / (frame_size/1000))
+for t in range(start, end, step):
+    timestamp.append(t+window//2)
+    req.append(log['req_msec'].between(t, t+window, inclusive='left').sum() / (window/1000))
 
 Graph1 = plt.figure(1)
 req_per_sec= Graph1.add_subplot(111)
